@@ -1,0 +1,33 @@
+name: Release
+
+# Push a tag matching the plugin version (e.g. v0.7.1) to build the .snplg
+# and attach it to a GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx jest
+      - name: Check the tag matches PluginConfig.json
+        run: |
+          version=$(node -p "require('./PluginConfig.json').versionName")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME != v$version"; exit 1; }
+      - run: bash ./buildPlugin.sh
+      - run: test -f build/outputs/ShapeSnap.snplg
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: build/outputs/ShapeSnap.snplg
+          generate_release_notes: true

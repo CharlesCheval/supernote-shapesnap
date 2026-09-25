@@ -1,0 +1,15 @@
+{
+  "name": "ShapeSnap",
+  "desc": "Draw a rectangle or a circle, hold the pen still for a moment: it snaps into a perfect shape.",
+  "author": "Charles Cheval",
+  "iconPath": "assets/icon_shapes.png",
+  "versionName": "0.7.1",
+  "versionCode": "11",
+  "pluginID": "nhlqwjc2qwewoz9m",
+  "pluginKey": "ShapeSnap",
+  "jsMainPath": "index",
+  "uses-permissions": [
+    "plugin.permission.FILE:READ",
+    "plugin.permission.FILE:WRITE"
+  ]
+}
