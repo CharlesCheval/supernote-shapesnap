@@ -67,9 +67,14 @@ export async function loadSettings() {
     if (!dir || !(await FileUtils.exists(dir))) {
       return;
     }
-    const entries = (await FileUtils.listFiles(dir)) ?? [];
+    // Typed as strings, but the native module returns {path, type} objects.
+    const entries: unknown[] = (await FileUtils.listFiles(dir)) ?? [];
     for (const entry of entries) {
-      const name = entry.replace(/\/+$/, '');
+      const path = typeof entry === 'string' ? entry : (entry as {path?: string} | null)?.path;
+      if (typeof path !== 'string') {
+        continue;
+      }
+      const name = path.replace(/\/+$/, '');
       try {
         const saved = JSON.parse(decodeURIComponent(name.slice(name.lastIndexOf('/') + 1)));
         current = {...DEFAULTS, ...saved};

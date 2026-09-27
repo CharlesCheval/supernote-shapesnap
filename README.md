@@ -40,12 +40,15 @@ The **Last stroke** box shows three things:
 
   | Mode | Stroke | Undo history |
   |---|---|---|
-  | `lasso` (default) | deleted via a lasso (`deleteLassoElements`) when it is alone in its area, otherwise kept; brief flicker | kept |
+  | `lasso` (default) | deleted via a lasso (`deleteLassoElements`) when it is alone in its area, otherwise kept; brief flicker. If the stroke cannot be found on the page (e.g. it was a lasso path), no shape is created | kept |
   | `keep` | left under the shape | kept |
   | `number` | always deleted by element number (`deletePageElements`), even over writing or shapes; needs file access | **reset** |
 
   Measured on a Manta (3.29 beta): `deletePageElements` and `modifyPageElements` clear Supernote's undo history, while `insertGeometry` and lasso operations keep it.
 - If the file or page changes while a stroke is being processed, the plugin cancels without editing anything.
+- **Lasso tool:** if a lasso selection exists when the pen lifts, the stroke was a selection, not a drawing, and it is ignored.
+- **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape).
+- **Timeout:** each stroke is processed within 8 s, so a stuck host call can never block the following strokes.
 
 ## Install and build
 

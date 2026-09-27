@@ -69,10 +69,16 @@ async function pageSize(page: number): Promise<Size | null> {
   return validSize(size) ? {width: Math.round(size.width), height: Math.round(size.height)} : null;
 }
 
-type PointSet = {label: string; points: P[]};
+/**
+ * The stroke's points in some roughly-pixel-scaled space, and how to map a point
+ * of that space back to page pixels (where geometries are inserted).
+ */
+type PointSet = {label: string; points: P[]; toPixel: (p: P) => P};
 
-/** Stroke points in page pixels, from every source the SDK offers. */
-async function pixelPointSets(el: Element, size: number): Promise<PointSet[]> {
+const identity = (p: P) => p;
+
+/** Stroke points from every source the SDK offers, tried in order. */
+async function pointSets(el: Element, size: number): Promise<PointSet[]> {
   const sets: PointSet[] = [];
   const stroke = el.stroke!;
   // 1. Recognition points: already in pixels.
@@ -80,22 +86,46 @@ async function pixelPointSets(el: Element, size: number): Promise<PointSet[]> {
     const n = await stroke.recognPoints.size();
     if (n >= 8) {
       const data = await stroke.recognPoints.getRange(0, n);
-      sets.push({label: 'recogn', points: data.map(d => ({x: d.X, y: d.Y}))});
+      sets.push({label: 'recogn', points: data.map(d => ({x: d.X, y: d.Y})), toPixel: identity});
     }
   } catch {
     // not available on this stroke
   }
-  // 2. Sample points in EMR coordinates, converted to pixels.
+  // 2. Sample points in EMR coordinates, converted to pixels with the page size.
+  // 3. The same raw EMR points, only scaled: immune to a wrong page size (zoom, landscape).
   try {
     const ps = await pageSize(el.pageNum);
+    const emr = await stroke.points.getRange(0, size);
     if (ps) {
-      const emr = await stroke.points.getRange(0, size);
-      sets.push({label: `emr→px ${ps.width}×${ps.height}`, points: emr.map(p => PointUtils.emrPoint2Android(p, ps))});
+      sets.push({
+        label: `emr→px ${ps.width}×${ps.height}`,
+        points: emr.map(p => PointUtils.emrPoint2Android(p, ps)),
+        toPixel: identity,
+      });
+      const k = (Math.max(ps.width, ps.height) - 1) / PointUtils.getRealMaxX(ps);
+      sets.push({
+        label: 'emr (raw)',
+        points: emr.map(p => ({x: p.x * k, y: p.y * k})),
+        toPixel: q => PointUtils.emrPoint2Android({x: q.x / k, y: q.y / k}, ps),
+      });
     }
   } catch (e: any) {
-    sets.push({label: `emr→px failed: ${e?.message ?? e}`, points: []});
+    sets.push({label: `emr failed: ${e?.message ?? e}`, points: [], toPixel: identity});
   }
   return sets;
+}
+
+/** Maps a recognized shape from its point space to page pixels. */
+function shapeToPixels(shape: Shape, toPixel: (p: P) => P): Shape {
+  if (shape.kind === 'rect') {
+    const [a, b, c, d] = shape.corners.map(toPixel);
+    return {kind: 'rect', corners: [a, b, c, d]};
+  }
+  const center = toPixel({x: shape.cx, y: shape.cy});
+  const rx = toPixel({x: shape.cx + shape.r, y: shape.cy});
+  const ry = toPixel({x: shape.cx, y: shape.cy + shape.r});
+  const r = (Math.hypot(rx.x - center.x, rx.y - center.y) + Math.hypot(ry.x - center.x, ry.y - center.y)) / 2;
+  return {kind: 'circle', cx: center.x, cy: center.y, r};
 }
 
 function describe(label: string, r: Recognition): string {
@@ -267,37 +297,65 @@ async function findByScan(target: StrokeSignature, page: number): Promise<{num: 
   return {num: null, why: `scan: not found among the ${newest.length} newest elements`};
 }
 
-/**
- * Lasso deletion, the only removal that keeps Supernote's undo history.
- * The lasso box is hidden right away to limit flicker; the stroke is deleted only
- * if it is the sole element in its bounding box (never someone else's writing).
- */
-async function lassoDeleteIfAlone(page: number, points: P[]): Promise<{ok: boolean; how: string}> {
-  const ps = await pageSize(page);
-  if (!ps || !points.length) {
-    return {ok: false, how: 'lasso: no page size'};
-  }
-  const pad = 6;
-  const rect = {
+/** Pixel rectangle around points, padded, clamped to the page. */
+function paddedRect(points: P[], pad: number, ps: Size) {
+  return {
     left: Math.max(0, Math.floor(Math.min(...points.map(p => p.x)) - pad)),
     top: Math.max(0, Math.floor(Math.min(...points.map(p => p.y)) - pad)),
     right: Math.min(ps.width, Math.ceil(Math.max(...points.map(p => p.x)) + pad)),
     bottom: Math.min(ps.height, Math.ceil(Math.max(...points.map(p => p.y)) + pad)),
   };
-  await PluginCommAPI.setLassoBoxState(2).catch(() => undefined); // drop the previous shape's lasso
-  const lassoRes: any = await PluginCommAPI.lassoElements(rect);
-  if (!ok<boolean>(lassoRes)) {
-    return {ok: false, how: `lasso failed: ${errorText(lassoRes)}`};
+}
+
+type LassoRemoval = {found: boolean; removed: boolean; how: string};
+
+/**
+ * Lasso deletion, the only removal that keeps Supernote's undo history.
+ * Lassoes the stroke's area (padded by the pen width: a thick stroke overflows
+ * its centre line), then looks for OUR stroke among the selection:
+ * - not there: this was not a pen stroke (e.g. a lasso path), nothing is changed;
+ * - alone: it is deleted;
+ * - with other elements: it is left under the shape (never delete someone else's writing).
+ */
+async function lassoRemove(el: Element, points: P[]): Promise<LassoRemoval> {
+  const target = await signatureOf(el);
+  const ps = await pageSize(el.pageNum);
+  if (!target || !ps || !points.length) {
+    return {found: false, removed: false, how: 'lasso: no stroke data or page size'};
   }
-  await PluginCommAPI.setLassoBoxState(1).catch(() => undefined); // hide the box: less flicker
-  const selected = ok<Element[]>(await PluginCommAPI.getLassoElements()) ?? [];
-  selected.forEach(e => e?.uuid && PluginCommAPI.recycleElement(e.uuid));
-  if (selected.length !== 1) {
-    await PluginCommAPI.setLassoBoxState(2).catch(() => undefined);
-    return {ok: false, how: `lasso: ${selected.length} elements in the area, stroke kept`};
+  const strokePad = Math.ceil((el.thickness || 0) / 100);
+  let lastHow = '';
+  for (const pad of [8 + strokePad, 24 + 2 * strokePad]) {
+    await PluginCommAPI.setLassoBoxState(2).catch(() => undefined); // drop any previous lasso
+    const lassoRes: any = await PluginCommAPI.lassoElements(paddedRect(points, pad, ps));
+    if (!ok<boolean>(lassoRes)) {
+      lastHow = `lasso failed: ${errorText(lassoRes)}`;
+      continue;
+    }
+    await PluginCommAPI.setLassoBoxState(1).catch(() => undefined); // hide the box: less flicker
+    const selected = ok<Element[]>(await PluginCommAPI.getLassoElements()) ?? [];
+    let ours = false;
+    for (const e of selected) {
+      ours = ours || (await matches(e, target));
+      if (e?.uuid) {
+        PluginCommAPI.recycleElement(e.uuid);
+      }
+    }
+    if (!ours) {
+      await PluginCommAPI.setLassoBoxState(2).catch(() => undefined);
+      lastHow = `lasso (pad ${pad}px): stroke not among ${selected.length} selected`;
+      continue;
+    }
+    if (selected.length > 1) {
+      await PluginCommAPI.setLassoBoxState(2).catch(() => undefined);
+      return {found: true, removed: false, how: `lasso: ${selected.length} elements in the area, stroke kept`};
+    }
+    const del: any = await PluginCommAPI.deleteLassoElements();
+    return ok<boolean>(del)
+      ? {found: true, removed: true, how: `lasso delete (pad ${pad}px)`}
+      : {found: true, removed: false, how: `lasso delete failed: ${errorText(del)}`};
   }
-  const del: any = await PluginCommAPI.deleteLassoElements();
-  return ok<boolean>(del) ? {ok: true, how: 'lasso delete'} : {ok: false, how: `lasso delete failed: ${errorText(del)}`};
+  return {found: false, removed: false, how: lastHow};
 }
 
 /** Delete by element number: works over writing, but resets the undo history. */
@@ -335,13 +393,22 @@ async function removeStroke(el: Element, points: P[]): Promise<{ok: boolean; rem
     case 'keep':
       return {ok: true, removed: false, how: 'kept under the shape'};
     case 'lasso': {
-      const r = await lassoDeleteIfAlone(el.pageNum, points);
-      return {ok: true, removed: r.ok, how: r.how};
+      const r = await lassoRemove(el, points);
+      // Our stroke is not on the page: whatever was drawn, it was not a pen stroke.
+      return {ok: r.found, removed: r.removed, how: r.how};
     }
     case 'number': {
       const r = await deleteByNumber(el);
       return {ok: r.ok, removed: r.ok, how: r.how};
     }
+  }
+}
+
+async function lassoActive(): Promise<boolean> {
+  try {
+    return ok<object>(await PluginCommAPI.getLassoRect()) != null;
+  } catch {
+    return false;
   }
 }
 
@@ -354,6 +421,11 @@ async function handleStroke(el: Element) {
   const settings = getSettings();
   const stroke = el.stroke;
   if (!stroke) {
+    return;
+  }
+  // A lasso selection right after the pen lifts means the user was selecting, not drawing.
+  if (await lassoActive()) {
+    report({stillMs: 0, holdSource: 'clock', result: 'lasso selection active: ignored', details: []});
     return;
   }
   const place = await currentPlace();
@@ -371,9 +443,10 @@ async function handleStroke(el: Element) {
 
   // Try each point source; keep the first that yields a shape.
   const details: string[] = [];
+  details.push(`stroke: pen ${stroke.penType}, color ${stroke.penColor}, thickness ${el.thickness}, #${el.numInPage}`);
   let shape: Shape | null = null;
   let shapePoints: P[] = [];
-  for (const set of await pixelPointSets(el, size)) {
+  for (const set of await pointSets(el, size)) {
     const r = recognize(set.points, {
       tolerance: settings.tolerance,
       minSize: MIN_SHAPE_SIZE,
@@ -382,8 +455,8 @@ async function handleStroke(el: Element) {
     });
     details.push(describe(set.label, r));
     if (r.shape) {
-      shape = r.shape;
-      shapePoints = set.points;
+      shape = shapeToPixels(r.shape, set.toPixel);
+      shapePoints = set.points.map(set.toPixel);
       break;
     }
     if (r.reason.startsWith('too small')) {
@@ -402,16 +475,17 @@ async function handleStroke(el: Element) {
     width: 100,
   };
 
-  // Never edit a page the user has already left (e.g. after a swipe to another file).
-  if ((await currentPlace()) !== place) {
+  // Never edit a page the user has already left (e.g. after a swipe to another file),
+  // nor interfere with a lasso selection made in the meantime.
+  if ((await currentPlace()) !== place || (await lassoActive())) {
     report({stillMs, holdSource, result: 'cancelled: file or page changed', details});
     return;
   }
   // Remove the stroke first (per setting), then insert the shape; restore the stroke if insertion fails.
   const deletion = await removeStroke(el, shapePoints);
-  details.push(`stroke: ${deletion.how}`);
+  details.push(`removal: ${deletion.how}`);
   if (!deletion.ok) {
-    report({stillMs, holdSource, result: 'failed: stroke could not be deleted', details});
+    report({stillMs, holdSource, result: 'not snapped: the stroke was not found on the page', details});
     return;
   }
   if ((await currentPlace()) !== place) {
@@ -431,6 +505,25 @@ async function handleStroke(el: Element) {
 
 let queue: Promise<void> = Promise.resolve();
 
+/** A stuck host call must never block the strokes that follow. */
+const STROKE_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+    work.then(
+      v => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      e => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 function onPenUp(msg: unknown) {
   const elements = (Array.isArray(msg) ? msg : []) as Element[];
   const release = () => elements.forEach(e => e?.uuid && PluginCommAPI.recycleElement(e.uuid));
@@ -441,7 +534,7 @@ function onPenUp(msg: unknown) {
   const strokes = elements.filter(e => e?.type === Element.TYPE_STROKE && e.stroke);
   const last = strokes[strokes.length - 1];
   queue = queue
-    .then(() => (last ? handleStroke(last) : undefined))
+    .then(() => (last ? withTimeout(handleStroke(last), STROKE_TIMEOUT_MS) : undefined))
     .catch((e: any) =>
       report({stillMs: 0, holdSource: 'clock', result: `error: ${e?.message ?? e}`, details: []}),
     )
