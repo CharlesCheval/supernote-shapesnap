@@ -36,7 +36,7 @@ function Stepper({label, hint, k, unit}: {label: string; hint: string; k: NumKey
   );
 }
 
-function Toggle({label, hint, k}: {label: string; hint?: string; k: 'enabled' | 'rect' | 'circle' | 'lassoAfter'}) {
+function Toggle({label, hint, k}: {label: string; hint?: string; k: 'enabled' | 'rect' | 'circle' | 'arrow' | 'lassoAfter'}) {
   const on = getSettings()[k];
   return (
     <View style={styles.row}>
@@ -72,7 +72,7 @@ function App(): React.JSX.Element {
         </Pressable>
       </View>
       <Text style={styles.intro}>
-        Draw a rectangle or a circle and lift the pen: it snaps into a perfect shape. Set a hold duration to require a short pause first.
+        Draw a rectangle, a circle or an arrow and lift the pen: it snaps into a perfect shape. Set a hold duration to require a short pause first.
       </Text>
 
       <Toggle label="Enabled" k="enabled" />
@@ -81,6 +81,11 @@ function App(): React.JSX.Element {
       <Stepper label="Tolerance" hint="1 = neat drawing required · 5 = very lenient" k="tolerance" unit="/ 5" />
       <Toggle label="Rectangles" k="rect" />
       <Toggle label="Circles" hint="Always perfect, even from a slightly oval stroke" k="circle" />
+      <Toggle
+        label="Arrows"
+        hint="Draw a straight line and its head without lifting the pen · head size follows the pen width"
+        k="arrow"
+      />
       <Toggle label="Select after snapping" hint="The shape appears lasso-selected, ready to resize" k="lassoAfter" />
 
       <View style={styles.row}>

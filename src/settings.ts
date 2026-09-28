@@ -15,6 +15,8 @@ export type Settings = {
   tolerance: number;
   rect: boolean;
   circle: boolean;
+  /** Straight arrow: a shaft with a small head drawn at its end, in one stroke. */
+  arrow: boolean;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
   /**
@@ -37,6 +39,7 @@ export const DEFAULTS: Settings = {
   tolerance: 3,
   rect: true,
   circle: true,
+  arrow: true,
   lassoAfter: true,
   replaceMode: 'number',
 };

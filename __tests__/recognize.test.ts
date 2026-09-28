@@ -1,6 +1,6 @@
-import {P, recognize, trailingStillCount} from '../src/recognize';
+import {P, arrowPoints, recognize, trailingStillCount} from '../src/recognize';
 
-const opts = {tolerance: 3, minSize: 60, rect: true, circle: true};
+const opts = {tolerance: 3, minSize: 60, rect: true, circle: true, arrow: true};
 
 /** Deterministic low-frequency wobble + noise, like a real hand. */
 function hand(points: P[], amp: number, seed = 7): P[] {
@@ -114,6 +114,7 @@ describe('rejected', () => {
   test('disabled shapes', () => {
     expect(kind(rect(100, 100, 700, 400), {...opts, rect: false})).not.toBe('rect');
     expect(kind(arc(500, 500, 200, 200, 1.05), {...opts, circle: false})).toBeNull();
+    expect(kind(hand(arrow({x: 100, y: 300}, {x: 700, y: 300}, 50, 'barb-tip-barb'), 3), {...opts, arrow: false})).toBeNull();
   });
 });
 
@@ -121,4 +122,73 @@ test('final dwell: still points are counted', () => {
   const stroke = [...rect(100, 100, 700, 400), ...Array.from({length: 40}, () => ({x: 101, y: 111}))];
   expect(trailingStillCount(stroke, 10)).toBeGreaterThanOrEqual(40);
   expect(kind(stroke)).toBe('rect');
+});
+
+/** Hand-drawn arrow: shaft from `a` to `b`, then a head of size `h` drawn in one of the usual ways. */
+function arrow(a: P, b: P, h: number, style: 'barb-tip-barb' | 'triangle' | 'open-v', deg = 30, bow = 0): P[] {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const bx = (a.x - b.x) / len;
+  const by = (a.y - b.y) / len;
+  const r = (deg * Math.PI) / 180;
+  const barb = (s: number) => ({
+    x: b.x + h * (bx * Math.cos(s * r) - by * Math.sin(s * r)),
+    y: b.y + h * (bx * Math.sin(s * r) + by * Math.cos(s * r)),
+  });
+  const heads = {
+    'barb-tip-barb': [b, barb(1), b, barb(-1)],
+    triangle: [b, barb(1), barb(-1), b],
+    'open-v': [b, barb(1), barb(-1)],
+  };
+  // Optional bow: the shaft passes through a midpoint pushed sideways by `bow` × its length.
+  const mid = {x: (a.x + b.x) / 2 - by * bow * len, y: (a.y + b.y) / 2 + bx * bow * len};
+  const shaft = bow ? [a, mid] : [a];
+  return polyline([...shaft, ...heads[style]], 30);
+}
+
+describe('arrows', () => {
+  const tail = {x: 100, y: 300};
+  test('barb → tip → barb head', () => expect(kind(hand(arrow(tail, {x: 800, y: 330}, 60, 'barb-tip-barb'), 3))).toBe('arrow'));
+  test('closed triangle head', () => expect(kind(hand(arrow(tail, {x: 700, y: 700}, 50, 'triangle'), 3))).toBe('arrow'));
+  test('open V head', () => expect(kind(hand(arrow({x: 500, y: 900}, {x: 500, y: 200}, 40, 'open-v'), 3))).toBe('arrow'));
+  // Measured from real drawings: wide triangular heads, slightly bowed shafts.
+  test('wide triangle head (55°), bowed shaft', () =>
+    expect(kind(hand(arrow({x: 480, y: 550}, {x: 770, y: 440}, 45, 'triangle', 55, 0.05), 2))).toBe('arrow'));
+  test('very wide triangle head (65°), up-left', () =>
+    expect(kind(hand(arrow({x: 640, y: 1500}, {x: 530, y: 1380}, 50, 'triangle', 65), 2))).toBe('arrow'));
+  test('short arrow with a big head', () => expect(kind(hand(arrow(tail, {x: 260, y: 300}, 45, 'barb-tip-barb'), 2))).toBe('arrow'));
+
+  test('near-horizontal shaft is snapped, tail kept', () => {
+    const res = recognize(hand(arrow(tail, {x: 800, y: 380}, 50, 'barb-tip-barb'), 3), opts);
+    expect(res.shape?.kind).toBe('arrow');
+    if (res.shape?.kind === 'arrow') {
+      expect(res.shape.tip.y).toBeCloseTo(res.shape.tail.y, 5);
+      expect(Math.abs(res.shape.tail.x - 100)).toBeLessThan(10);
+    }
+  });
+  test('diagonal shaft stays free', () => {
+    const res = recognize(hand(arrow(tail, {x: 600, y: 700}, 50, 'barb-tip-barb'), 3), opts);
+    expect(res.shape?.kind).toBe('arrow');
+    if (res.shape?.kind === 'arrow') {
+      expect(Math.abs(res.shape.tip.y - res.shape.tail.y)).toBeGreaterThan(300);
+    }
+  });
+
+  test('straight line without a head', () => expect(kind(hand(polyline([tail, {x: 800, y: 320}]), 3))).toBeNull());
+  test('line ending with a one-sided hook', () =>
+    expect(kind(polyline([tail, {x: 800, y: 300}, {x: 760, y: 330}], 30))).toBeNull());
+  test('curved shaft', () => expect(kind(polyline([tail, {x: 450, y: 450}, {x: 800, y: 300}, {x: 760, y: 280}, {x: 800, y: 300}, {x: 770, y: 340}], 30))).toBeNull());
+  test('zigzag is not an arrow', () =>
+    expect(kind(polyline([tail, {x: 250, y: 200}, {x: 400, y: 300}, {x: 550, y: 200}, {x: 700, y: 300}], 30))).toBeNull());
+});
+
+test('arrow head has a fixed size, whatever was drawn', () => {
+  const pts = arrowPoints({x: 0, y: 0}, {x: 500, y: 0}, 40);
+  expect(pts).toHaveLength(5);
+  expect(pts[1]).toEqual({x: 500, y: 0});
+  expect(pts[4]).toEqual({x: 500, y: 0}); // closed head
+  for (const b of [pts[2], pts[3]]) {
+    expect(Math.hypot(b.x - 500, b.y)).toBeCloseTo(40, 5);
+    expect(b.x).toBeLessThan(500);
+  }
+  expect(pts[2].y).toBeCloseTo(-pts[3].y, 5);
 });

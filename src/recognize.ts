@@ -8,13 +8,17 @@
  *  3. count sharp corners along the closed loop;
  *  4. fit a circle (least squares) and a minimum-area rectangle, and measure both errors;
  *  5. rectangle = ~4 corners + small rectangle error, circle = no corners + small circle error.
+ *
+ * Arrows (open strokes): a straight shaft, then a small head drawn at its far end
+ * without lifting the pen (see recognizeArrow).
  */
 
 export type P = {x: number; y: number};
 
 export type Shape =
   | {kind: 'rect'; corners: [P, P, P, P]}
-  | {kind: 'circle'; cx: number; cy: number; r: number};
+  | {kind: 'circle'; cx: number; cy: number; r: number}
+  | {kind: 'arrow'; tail: P; tip: P};
 
 export type RecognizeOptions = {
   /** 1 (strict) to 5 (lenient). */
@@ -23,6 +27,7 @@ export type RecognizeOptions = {
   minSize: number;
   rect: boolean;
   circle: boolean;
+  arrow: boolean;
 };
 
 export type Metrics = {
@@ -39,7 +44,7 @@ export type Metrics = {
 
 export type Recognition = {shape: Shape | null; reason: string; metrics?: Metrics};
 
-/** Rectangles tilted less than this are snapped to the page axes. */
+/** Rectangles and arrows tilted less than this are snapped to the page axes. */
 const SNAP_DEGREES = 12;
 
 const dist = (a: P, b: P) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -212,6 +217,106 @@ export function fitRect(pts: P[]) {
   return {corners, err, angle: best.deg, w: best.r - best.l, h: best.b - best.t};
 }
 
+/** Cumulative path length at each point. */
+function cumulative(path: P[]): number[] {
+  const out = [0];
+  for (let i = 1; i < path.length; i++) {
+    out.push(out[i - 1] + dist(path[i - 1], path[i]));
+  }
+  return out;
+}
+
+/**
+ * Arrow drawn in one stroke: a straight shaft from the start, then a small head
+ * at its far end (any usual way: tip → barb → tip → barb, a closed triangle…).
+ * - tip = the point farthest from the start;
+ * - the shaft (start → tip) must be straight;
+ * - the head (after the tip) must stay small, go back behind the tip, and
+ *   reach both sides of the shaft: a line ending with a one-sided hook is not an arrow.
+ * The drawn head only proves the intent: its size is not kept (see arrowPoints).
+ */
+export function recognizeArrow(path: P[], minSize: number, k: number): {shape: Shape | null; reason: string} {
+  const tail = path[0];
+  // The head often passes through the tip again (tip → barb → tip → barb):
+  // take the FIRST point that reaches the farthest distance, within a small slack.
+  const far = Math.max(...path.map(q => dist(q, tail)));
+  const slack = Math.max(4, 0.015 * far);
+  const tipIdx = path.findIndex(q => dist(q, tail) >= far - slack);
+  const tip = path[tipIdx];
+  const chord = dist(tail, tip);
+  if (chord < minSize) {
+    return {shape: null, reason: 'arrow: shaft too short'};
+  }
+  const u = {x: (tip.x - tail.x) / chord, y: (tip.y - tail.y) / chord};
+  const lateral = (q: P, o: P) => (q.x - o.x) * -u.y + (q.y - o.y) * u.x;
+  const along = (q: P, o: P) => (q.x - o.x) * u.x + (q.y - o.y) * u.y;
+
+  // Shaft straightness: largest and mean distance to the start → tip line.
+  const shaft = path.slice(0, tipIdx + 1);
+  const devs = shaft.map(q => Math.abs(lateral(q, tail)));
+  const maxDev = Math.max(...devs) / chord;
+  const meanDev = devs.reduce((a, b) => a + b, 0) / devs.length / chord;
+  // Hand-drawn shafts often bow slightly.
+  if (maxDev > 0.09 * k || meanDev > 0.04 * k) {
+    return {shape: null, reason: `arrow: shaft not straight (${(maxDev * 100).toFixed(0)}%)`};
+  }
+
+  // Head: everything drawn after the tip.
+  const head = path.slice(tipIdx);
+  const len = cumulative(path);
+  const headLen = len[len.length - 1] - len[tipIdx];
+  const span = Math.max(...head.map(q => dist(q, tip)));
+  if (headLen < 15 || span < 10) {
+    return {shape: null, reason: 'arrow: no head'};
+  }
+  if (span > 0.6 * chord) {
+    return {shape: null, reason: 'arrow: head too big for the shaft'};
+  }
+  const back = -Math.min(...head.map(q => along(q, tip)));
+  const left = Math.max(...head.map(q => lateral(q, tip)));
+  const right = -Math.min(...head.map(q => lateral(q, tip)));
+  // Wide heads (barbs up to ~70° from the shaft) go back only a little.
+  if (back < 0.2 * span) {
+    return {shape: null, reason: 'arrow: head does not point back'};
+  }
+  if (Math.min(left, right) < 0.25 * span) {
+    return {shape: null, reason: 'arrow: head on one side only'};
+  }
+  return {shape: {kind: 'arrow', tail, tip: snapDirection(tail, tip)}, reason: 'arrow'};
+}
+
+/** Keeps the tail; turns the shaft to horizontal / vertical when it is within SNAP_DEGREES. */
+export function snapDirection(tail: P, tip: P): P {
+  const dx = tip.x - tail.x;
+  const dy = tip.y - tail.y;
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const off = Math.abs(deg - Math.round(deg / 90) * 90);
+  if (off > SNAP_DEGREES) {
+    return tip;
+  }
+  return Math.abs(dx) >= Math.abs(dy) ? {x: tip.x, y: tail.y} : {x: tail.x, y: tip.y};
+}
+
+/** Angle between each barb and the shaft. */
+const BARB_DEGREES = 30;
+
+/**
+ * Arrow as one polyline with a closed triangular head: tail → tip → barb → barb → tip.
+ * `headLength` is fixed by the caller (from the pen width), whatever the drawn head size.
+ */
+export function arrowPoints(tail: P, tip: P, headLength: number): P[] {
+  const len = Math.max(1, dist(tail, tip));
+  const h = Math.min(headLength, len / 2);
+  const bx = (tail.x - tip.x) / len;
+  const by = (tail.y - tip.y) / len;
+  const a = (BARB_DEGREES * Math.PI) / 180;
+  const barb = (s: number) => ({
+    x: tip.x + h * (bx * Math.cos(s * a) - by * Math.sin(s * a)),
+    y: tip.y + h * (bx * Math.sin(s * a) + by * Math.cos(s * a)),
+  });
+  return [tail, tip, barb(1), barb(-1), tip];
+}
+
 export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   if (raw.length < 8) {
     return {shape: null, reason: 'stroke too short'};
@@ -243,8 +348,16 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   const rect = fitRect(loop);
   const metrics: Metrics = {width, height, gap, corners, rectErr: rect.err, circErr: circle.err, angle: rect.angle};
 
+  const tryArrow = (why: string): Recognition => {
+    if (!opts.arrow) {
+      return {shape: null, reason: why, metrics};
+    }
+    const a = recognizeArrow(path, opts.minSize, k);
+    return {shape: a.shape, reason: a.shape ? a.reason : `${why}; ${a.reason}`, metrics};
+  };
+
   if (gap > 0.25 * k) {
-    return {shape: null, reason: 'shape not closed', metrics};
+    return tryArrow('shape not closed');
   }
   const rectOk =
     opts.rect &&
@@ -259,5 +372,5 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
     // Always a perfect circle, even from a slightly oval stroke.
     return {shape: {kind: 'circle', cx: circle.cx, cy: circle.cy, r: circle.r}, reason: 'circle', metrics};
   }
-  return {shape: null, reason: 'shape not recognized', metrics};
+  return tryArrow('shape not recognized');
 }

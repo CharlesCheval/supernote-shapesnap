@@ -1,7 +1,7 @@
 import {Element, PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, PointUtils} from 'sn-plugin-lib';
 import {isInk, strokeOrigin} from './guard';
 import {HoldTracker, PenMotion} from './hold';
-import {P, Recognition, Shape, recognize, trailingStillCount} from './recognize';
+import {P, Recognition, Shape, arrowPoints, recognize, trailingStillCount} from './recognize';
 import {getSettings} from './settings';
 
 /**
@@ -126,6 +126,9 @@ function shapeToPixels(shape: Shape, toPixel: (p: P) => P): Shape {
     const [a, b, c, d] = shape.corners.map(toPixel);
     return {kind: 'rect', corners: [a, b, c, d]};
   }
+  if (shape.kind === 'arrow') {
+    return {kind: 'arrow', tail: toPixel(shape.tail), tip: toPixel(shape.tip)};
+  }
   const center = toPixel({x: shape.cx, y: shape.cy});
   const rx = toPixel({x: shape.cx + shape.r, y: shape.cy});
   const ry = toPixel({x: shape.cx, y: shape.cy + shape.r});
@@ -145,6 +148,15 @@ function describe(label: string, r: Recognition): string {
   );
 }
 
+/**
+ * Arrow head length (px), set by the pen width only, never by the drawn head.
+ * Pen widths are about 100 units per pixel of line (0.5 pen ≈ 600 ≈ 6 px):
+ * 0.2 → 42 px, 0.5 → 54 px, 1.0 → 78 px, 2.0 → 126 px.
+ */
+function arrowHeadLength(penWidth: number): number {
+  return Math.round(Math.min(160, 30 + (4 * penWidth) / 100));
+}
+
 function geometryFor(shape: Shape, pen: {type: number; color: number; width: number}, lasso: boolean) {
   const base = {
     showLassoAfterInsert: lasso,
@@ -152,6 +164,19 @@ function geometryFor(shape: Shape, pen: {type: number; color: number; width: num
     penType: pen.type,
     penWidth: Math.max(100, pen.width),
   };
+  if (shape.kind === 'arrow') {
+    // One polyline: tail → tip → barb → barb → tip (closed triangular head).
+    const pts = arrowPoints(shape.tail, shape.tip, arrowHeadLength(base.penWidth));
+    return {
+      ...base,
+      type: 'GEO_polygon',
+      points: pts.map(p => ({x: Math.round(p.x), y: Math.round(p.y)})),
+      ellipseCenterPoint: null,
+      ellipseMajorAxisRadius: 0,
+      ellipseMinorAxisRadius: 0,
+      ellipseAngle: 0,
+    };
+  }
   if (shape.kind === 'circle') {
     return {
       ...base,
@@ -399,6 +424,7 @@ async function handleStroke(el: Element) {
       minSize: MIN_SHAPE_SIZE,
       rect: settings.rect,
       circle: settings.circle,
+      arrow: settings.arrow,
     });
     details.push(describe(set.label, r));
     if (r.shape) {
@@ -446,7 +472,8 @@ async function handleStroke(el: Element) {
     report({stillMs, holdSource, result: 'failed: shape not inserted, stroke restored', details});
     return;
   }
-  report({stillMs, holdSource, result: shape.kind === 'rect' ? '▭ rectangle created' : '◯ circle created', details});
+  const created = {rect: '▭ rectangle created', circle: '◯ circle created', arrow: '→ arrow created'}[shape.kind];
+  report({stillMs, holdSource, result: created, details});
 }
 
 let queue: Promise<void> = Promise.resolve();
