@@ -209,3 +209,9 @@ test('filled head: rungs stay inside the triangle, spaced as asked, ending on th
   }
   expect(500 - rungs[rungs.length - 1].x).toBeCloseTo(depth, 5);
 });
+
+test('same head size on short and long arrows', () => {
+  const size = (pts: P[]) => Math.hypot(pts[2].x - pts[1].x, pts[2].y - pts[1].y);
+  expect(size(arrowPoints({x: 0, y: 0}, {x: 120, y: 0}, 100))).toBeCloseTo(100, 5);
+  expect(size(arrowPoints({x: 0, y: 0}, {x: 900, y: 0}, 100))).toBeCloseTo(100, 5);
+});

@@ -309,7 +309,8 @@ const BARB_DEGREES = 30;
  */
 export function arrowPoints(tail: P, tip: P, headLength: number, fillSpacing = 0): P[] {
   const len = Math.max(1, dist(tail, tip));
-  const h = Math.min(headLength, len / 2);
+  // Always the same head, whatever the arrow length.
+  const h = headLength;
   const bx = (tail.x - tip.x) / len;
   const by = (tail.y - tip.y) / len;
   const a = (BARB_DEGREES * Math.PI) / 180;
