@@ -1,6 +1,6 @@
-import {P, arrowPoints, recognize, trailingStillCount} from '../src/recognize';
+import {P, arrowPoints, recognize, snapDirection, trailingStillCount} from '../src/recognize';
 
-const opts = {tolerance: 3, minSize: 60, rect: true, circle: true, arrow: true};
+const opts = {tolerance: 3, minSize: 60, rect: true, circle: true, arrow: true, arrowSnapDegrees: 8};
 
 /** Deterministic low-frequency wobble + noise, like a real hand. */
 function hand(points: P[], amp: number, seed = 7): P[] {
@@ -214,4 +214,14 @@ test('same head size on short and long arrows', () => {
   const size = (pts: P[]) => Math.hypot(pts[2].x - pts[1].x, pts[2].y - pts[1].y);
   expect(size(arrowPoints({x: 0, y: 0}, {x: 120, y: 0}, 100))).toBeCloseTo(100, 5);
   expect(size(arrowPoints({x: 0, y: 0}, {x: 900, y: 0}, 100))).toBeCloseTo(100, 5);
+});
+
+test('arrow snapping angle is configurable', () => {
+  const tail = {x: 0, y: 0};
+  const at = (deg: number) => ({x: 500 * Math.cos((deg * Math.PI) / 180), y: 500 * Math.sin((deg * Math.PI) / 180)});
+  expect(snapDirection(tail, at(7), 8).y).toBe(0);
+  expect(snapDirection(tail, at(10), 8)).toEqual(at(10));
+  expect(snapDirection(tail, at(10), 12).y).toBe(0);
+  expect(snapDirection(tail, at(85), 8).x).toBe(0);
+  expect(snapDirection(tail, at(3), 0)).toEqual(at(3));
 });

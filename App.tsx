@@ -86,6 +86,12 @@ function App(): React.JSX.Element {
         hint="Draw a straight line and its head without lifting the pen · head size follows the pen width"
         k="arrow"
       />
+      <Stepper
+        label="Arrow snapping"
+        hint="Arrows this close to horizontal or vertical are straightened · 0 = never · lower = more precise"
+        k="arrowSnapDegrees"
+        unit="°"
+      />
       <Toggle label="Select after snapping" hint="The shape appears lasso-selected, ready to resize" k="lassoAfter" />
 
       <View style={styles.row}>

@@ -6,7 +6,7 @@ Draw a **rectangle**, a **circle** or an **arrow** and lift the pen. The stroke 
 - **Resizing:** the shape appears lasso-selected, ready to be resized.
 - **Circles:** always perfect, even from a slightly oval stroke. Ellipses are never created.
 - **Rectangles:** strokes tilted less than 12° are snapped to the page axes. Beyond that, the rectangle keeps its tilt.
-- **Arrows:** draw a straight line, then its head at the end, without lifting the pen (a triangle, a V, or barb → tip → barb). The result is a clean shaft with a solid triangular head whose size depends only on the pen width, never on the drawn head. A shaft within 12° of horizontal or vertical is snapped to it; otherwise it keeps its direction.
+- **Arrows:** draw a straight line, then its head at the end, without lifting the pen (a triangle, a V, or barb → tip → barb). The result is a clean shaft with a solid triangular head whose size depends only on the pen width, never on the drawn head. A shaft within the **Arrow snapping** angle (default 8°) of horizontal or vertical is snapped to it; otherwise it keeps its direction.
 - **Normal writing:** a stroke without a pause is left untouched.
 
 The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → ShapeSnap**.
@@ -19,6 +19,7 @@ The plugin adds no toolbar button. Its settings live under **Settings → Apps �
 | Stillness | Jitter allowed during the hold (default 12 px) |
 | Tolerance | How neat the drawing must be, 1 (strict) to 5 (lenient) |
 | Rectangles / Circles / Arrows | Enable each shape |
+| Arrow snapping | Arrows within this angle of horizontal or vertical are straightened, 0 to 20° (default 8°, 0 = never) |
 | Select after snapping | Show the lasso on the new shape |
 
 The **Last stroke** box shows three things:

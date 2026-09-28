@@ -17,6 +17,8 @@ export type Settings = {
   circle: boolean;
   /** Straight arrow: a shaft with a small head drawn at its end, in one stroke. */
   arrow: boolean;
+  /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
+  arrowSnapDegrees: number;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
   /**
@@ -40,6 +42,7 @@ export const DEFAULTS: Settings = {
   rect: true,
   circle: true,
   arrow: true,
+  arrowSnapDegrees: 8,
   lassoAfter: true,
   replaceMode: 'number',
 };
@@ -48,6 +51,7 @@ export const LIMITS = {
   holdMs: {min: 0, max: 1000, step: 25},
   stillRadius: {min: 4, max: 40, step: 2},
   tolerance: {min: 1, max: 5, step: 1},
+  arrowSnapDegrees: {min: 0, max: 20, step: 1},
 };
 
 let current: Settings = {...DEFAULTS};

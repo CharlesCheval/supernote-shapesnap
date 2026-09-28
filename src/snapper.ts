@@ -427,6 +427,7 @@ async function handleStroke(el: Element) {
       rect: settings.rect,
       circle: settings.circle,
       arrow: settings.arrow,
+      arrowSnapDegrees: settings.arrowSnapDegrees,
     });
     details.push(describe(set.label, r));
     if (r.shape) {

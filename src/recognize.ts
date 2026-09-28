@@ -28,6 +28,8 @@ export type RecognizeOptions = {
   rect: boolean;
   circle: boolean;
   arrow: boolean;
+  /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
+  arrowSnapDegrees: number;
 };
 
 export type Metrics = {
@@ -44,7 +46,7 @@ export type Metrics = {
 
 export type Recognition = {shape: Shape | null; reason: string; metrics?: Metrics};
 
-/** Rectangles and arrows tilted less than this are snapped to the page axes. */
+/** Rectangles tilted less than this are snapped to the page axes. */
 const SNAP_DEGREES = 12;
 
 const dist = (a: P, b: P) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -235,7 +237,12 @@ function cumulative(path: P[]): number[] {
  *   reach both sides of the shaft: a line ending with a one-sided hook is not an arrow.
  * The drawn head only proves the intent: its size is not kept (see arrowPoints).
  */
-export function recognizeArrow(path: P[], minSize: number, k: number): {shape: Shape | null; reason: string} {
+export function recognizeArrow(
+  path: P[],
+  minSize: number,
+  k: number,
+  snapDegrees: number,
+): {shape: Shape | null; reason: string} {
   const tail = path[0];
   // The head often passes through the tip again (tip → barb → tip → barb):
   // take the FIRST point that reaches the farthest distance, within a small slack.
@@ -282,16 +289,16 @@ export function recognizeArrow(path: P[], minSize: number, k: number): {shape: S
   if (Math.min(left, right) < 0.25 * span) {
     return {shape: null, reason: 'arrow: head on one side only'};
   }
-  return {shape: {kind: 'arrow', tail, tip: snapDirection(tail, tip)}, reason: 'arrow'};
+  return {shape: {kind: 'arrow', tail, tip: snapDirection(tail, tip, snapDegrees)}, reason: 'arrow'};
 }
 
-/** Keeps the tail; turns the shaft to horizontal / vertical when it is within SNAP_DEGREES. */
-export function snapDirection(tail: P, tip: P): P {
+/** Keeps the tail; turns the shaft to horizontal / vertical when it is within `maxDegrees` of it. */
+export function snapDirection(tail: P, tip: P, maxDegrees: number): P {
   const dx = tip.x - tail.x;
   const dy = tip.y - tail.y;
   const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
   const off = Math.abs(deg - Math.round(deg / 90) * 90);
-  if (off > SNAP_DEGREES) {
+  if (off > maxDegrees) {
     return tip;
   }
   return Math.abs(dx) >= Math.abs(dy) ? {x: tip.x, y: tail.y} : {x: tail.x, y: tip.y};
@@ -367,7 +374,7 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
     if (!opts.arrow) {
       return {shape: null, reason: why, metrics};
     }
-    const a = recognizeArrow(path, opts.minSize, k);
+    const a = recognizeArrow(path, opts.minSize, k, opts.arrowSnapDegrees);
     return {shape: a.shape, reason: a.shape ? a.reason : `${why}; ${a.reason}`, metrics};
   };
 
