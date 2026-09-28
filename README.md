@@ -6,7 +6,7 @@ Draw a **rectangle**, a **circle** or an **arrow** and lift the pen. The stroke 
 - **Resizing:** the shape appears lasso-selected, ready to be resized.
 - **Circles:** always perfect, even from a slightly oval stroke. Ellipses are never created.
 - **Rectangles:** strokes tilted less than 12° are snapped to the page axes. Beyond that, the rectangle keeps its tilt.
-- **Arrows:** draw a straight line, then its head at the end, without lifting the pen (a triangle, a V, or barb → tip → barb). The result is a clean shaft with a closed triangular head whose size depends only on the pen width, never on the drawn head. A shaft within 12° of horizontal or vertical is snapped to it; otherwise it keeps its direction.
+- **Arrows:** draw a straight line, then its head at the end, without lifting the pen (a triangle, a V, or barb → tip → barb). The result is a clean shaft with a solid triangular head whose size depends only on the pen width, never on the drawn head. A shaft within 12° of horizontal or vertical is snapped to it; otherwise it keeps its direction.
 - **Normal writing:** a stroke without a pause is left untouched.
 
 The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → ShapeSnap**.
@@ -37,7 +37,7 @@ The **Last stroke** box shows three things:
   - Sharp corners are counted along the loop.
   - A circle (least squares) and a minimum-area rectangle are fitted to the loop.
   - It is a rectangle if there are about 4 corners and a small rectangle error. It is a circle if there are no corners and a small circle error.
-  - Otherwise, an arrow: the tip is the first point farthest from the start; the start → tip shaft must be straight (slight bowing allowed); what is drawn after the tip must be small, go back behind the tip and reach both sides of the shaft. The head is drawn as one polyline (`GEO_polygon`), 30° barbs, length `30 px + 4 px per pen pixel`.
+  - Otherwise, an arrow: the tip is the first point farthest from the start; the start → tip shaft must be straight (slight bowing allowed); what is drawn after the tip must be small, go back behind the tip and reach both sides of the shaft. The whole arrow is one polyline (`GEO_polygon`), 30° barbs, length `30 px + 4 px per pen pixel`. Geometries cannot be filled, so the polyline zigzags across the head with rungs closer than the line width, which merge into a solid head.
 - **Replacement:** the shape is inserted with `insertGeometry`. What happens to the hand-drawn stroke depends on the **Stroke removal** setting:
 
   | Mode | Stroke | Undo history |

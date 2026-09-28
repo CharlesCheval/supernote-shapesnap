@@ -165,8 +165,10 @@ function geometryFor(shape: Shape, pen: {type: number; color: number; width: num
     penWidth: Math.max(100, pen.width),
   };
   if (shape.kind === 'arrow') {
-    // One polyline: tail → tip → barb → barb → tip (closed triangular head).
-    const pts = arrowPoints(shape.tail, shape.tip, arrowHeadLength(base.penWidth));
+    // One polyline: shaft, triangular head, then rungs that fill the head.
+    // Fill rungs well under the line width (about penWidth / 100 px, less for thin pens).
+    const spacing = Math.max(2, (0.4 * base.penWidth) / 100);
+    const pts = arrowPoints(shape.tail, shape.tip, arrowHeadLength(base.penWidth), spacing);
     return {
       ...base,
       type: 'GEO_polygon',

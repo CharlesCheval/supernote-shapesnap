@@ -192,3 +192,20 @@ test('arrow head has a fixed size, whatever was drawn', () => {
   }
   expect(pts[2].y).toBeCloseTo(-pts[3].y, 5);
 });
+
+test('filled head: rungs stay inside the triangle, spaced as asked, ending on the base', () => {
+  const pts = arrowPoints({x: 0, y: 0}, {x: 500, y: 0}, 40, 4);
+  const rungs = pts.slice(5);
+  const depth = 40 * Math.cos(Math.PI / 6);
+  expect(rungs.length).toBe(2 * Math.ceil(depth / 4));
+  for (const p of rungs) {
+    const back = 500 - p.x;
+    expect(back).toBeGreaterThan(0);
+    expect(back).toBeLessThanOrEqual(depth + 1e-9);
+    expect(Math.abs(p.y)).toBeLessThanOrEqual(back * Math.tan(Math.PI / 6) + 1e-9);
+  }
+  for (let i = 2; i < rungs.length; i += 2) {
+    expect(rungs[i - 2].x - rungs[i].x).toBeLessThanOrEqual(4 + 1e-9);
+  }
+  expect(500 - rungs[rungs.length - 1].x).toBeCloseTo(depth, 5);
+});

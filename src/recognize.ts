@@ -301,10 +301,13 @@ export function snapDirection(tail: P, tip: P): P {
 const BARB_DEGREES = 30;
 
 /**
- * Arrow as one polyline with a closed triangular head: tail → tip → barb → barb → tip.
+ * Arrow as one polyline: tail → tip → barb → barb → tip, then the head is filled.
+ * Geometries cannot be filled, so the polyline zigzags across the triangle,
+ * rung after rung from the tip to the base, `fillSpacing` apart: with rungs
+ * closer than the line width, they merge into a solid head.
  * `headLength` is fixed by the caller (from the pen width), whatever the drawn head size.
  */
-export function arrowPoints(tail: P, tip: P, headLength: number): P[] {
+export function arrowPoints(tail: P, tip: P, headLength: number, fillSpacing = 0): P[] {
   const len = Math.max(1, dist(tail, tip));
   const h = Math.min(headLength, len / 2);
   const bx = (tail.x - tip.x) / len;
@@ -314,7 +317,18 @@ export function arrowPoints(tail: P, tip: P, headLength: number): P[] {
     x: tip.x + h * (bx * Math.cos(s * a) - by * Math.sin(s * a)),
     y: tip.y + h * (bx * Math.sin(s * a) + by * Math.cos(s * a)),
   });
-  return [tail, tip, barb(1), barb(-1), tip];
+  const left = barb(1);
+  const right = barb(-1);
+  const pts = [tail, tip, left, right, tip];
+  if (fillSpacing > 0) {
+    const rungs = Math.ceil((h * Math.cos(a)) / fillSpacing);
+    const along = (end: P, f: number) => ({x: tip.x + f * (end.x - tip.x), y: tip.y + f * (end.y - tip.y)});
+    for (let i = 1; i <= rungs; i++) {
+      const f = i / rungs;
+      pts.push(...(i % 2 ? [along(left, f), along(right, f)] : [along(right, f), along(left, f)]));
+    }
+  }
+  return pts;
 }
 
 export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
