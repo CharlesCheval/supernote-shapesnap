@@ -87,8 +87,7 @@ function App(): React.JSX.Element {
         <View style={styles.labelBox}>
           <Text style={styles.label}>Stroke removal</Text>
           <Text style={styles.hint}>
-            lasso = removed when alone in its area (brief flicker) · keep = stroke left under the shape · number = always
-            removed, but clears the undo history
+            number = stroke removed, even over writing, but clears the undo history · keep = stroke left under the shape
           </Text>
         </View>
         <Pressable

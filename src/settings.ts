@@ -18,16 +18,17 @@ export type Settings = {
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
   /**
-   * How the hand-drawn stroke is removed once the shape is inserted:
-   * lasso = lasso-deleted when alone in its area (keeps undo history, brief flicker) ·
-   * keep = left under the shape (keeps undo history) ·
-   * number = deleted by element number (works over writing, but resets undo history).
+   * What happens to the hand-drawn stroke once the shape is inserted:
+   * number = deleted by element number (works over writing, but resets undo history) ·
+   * keep = left under the shape (keeps undo history).
+   * The former `lasso` mode is gone: driving the lasso from a plugin could clash
+   * with the user's own lasso selection.
    */
   replaceMode: ReplaceMode;
 };
 
-export type ReplaceMode = 'number' | 'lasso' | 'keep';
-export const REPLACE_MODES: ReplaceMode[] = ['lasso', 'keep', 'number'];
+export type ReplaceMode = 'number' | 'keep';
+export const REPLACE_MODES: ReplaceMode[] = ['number', 'keep'];
 
 export const DEFAULTS: Settings = {
   enabled: true,
@@ -37,7 +38,7 @@ export const DEFAULTS: Settings = {
   rect: true,
   circle: true,
   lassoAfter: true,
-  replaceMode: 'lasso',
+  replaceMode: 'number',
 };
 
 export const LIMITS = {
@@ -50,6 +51,15 @@ let current: Settings = {...DEFAULTS};
 const listeners = new Set<() => void>();
 
 export const getSettings = () => current;
+
+/** Saved settings merged over the defaults; unknown modes (e.g. the removed `lasso`) fall back to the default. */
+export function normalize(saved: Partial<Settings>): Settings {
+  const s = {...DEFAULTS, ...saved};
+  if (!REPLACE_MODES.includes(s.replaceMode)) {
+    s.replaceMode = DEFAULTS.replaceMode;
+  }
+  return s;
+}
 
 export function subscribe(fn: () => void): () => void {
   listeners.add(fn);
@@ -77,7 +87,7 @@ export async function loadSettings() {
       const name = path.replace(/\/+$/, '');
       try {
         const saved = JSON.parse(decodeURIComponent(name.slice(name.lastIndexOf('/') + 1)));
-        current = {...DEFAULTS, ...saved};
+        current = normalize(saved);
         listeners.forEach(fn => fn());
         return;
       } catch {

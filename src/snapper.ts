@@ -1,12 +1,17 @@
 import {Element, PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, PointUtils} from 'sn-plugin-lib';
+import {isInk, strokeOrigin} from './guard';
 import {HoldTracker, PenMotion} from './hold';
 import {P, Recognition, Shape, recognize, trailingStillCount} from './recognize';
 import {getSettings} from './settings';
 
 /**
- * Flow: stroke finished (event_pen_up) -> long enough final pause? -> shape recognized?
- *       -> delete the stroke -> insert a native geometry drawn with the active pen,
- *          selected with the lasso so it can be resized right away.
+ * Flow: stroke finished (event_pen_up) -> drawn with an ink pen (not the lasso)?
+ *       -> long enough final pause? -> shape recognized?
+ *       -> delete the stroke by element number -> insert a native geometry drawn
+ *          with the active pen, selected with the lasso so it can be resized right away.
+ *
+ * The plugin never drives the lasso itself (no lassoElements / setLassoBoxState /
+ * deleteLassoElements): doing so could clash with the user's own lasso selection.
  */
 
 /** Assumed pen sampling rate, only used when no pen clock is available (fallback). */
@@ -234,8 +239,14 @@ async function signatureOf(el: Element): Promise<StrokeSignature | null> {
 
 const samePoint = (a: P, b: P) => Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
 
-/** Same stroke = same first and last sample point (EMR coordinates are copied verbatim). */
+/**
+ * Same stroke = an ink stroke with the same first and last sample point
+ * (EMR coordinates are copied verbatim).
+ */
 async function matches(candidate: Element, target: StrokeSignature): Promise<boolean> {
+  if (!isInk(candidate.stroke?.penType)) {
+    return false;
+  }
   const sig = await signatureOf(candidate);
   return !!sig && samePoint(sig.first, target.first) && samePoint(sig.last, target.last);
 }
@@ -265,7 +276,7 @@ async function findByLastElement(target: StrokeSignature, page: number): Promise
 /**
  * Last resort: scans the page's elements, newest first. It needs the note saved
  * to disk first, and saving resets Supernote's undo history, so it only runs when
- * the in-memory lookups (last element, lasso) both failed.
+ * the in-memory lookups (pen-up element, last element) both failed.
  */
 async function findByScan(target: StrokeSignature, page: number): Promise<{num: number | null; why: string}> {
   const path = ok<string>(await PluginCommAPI.getCurrentFilePath());
@@ -297,67 +308,6 @@ async function findByScan(target: StrokeSignature, page: number): Promise<{num: 
   return {num: null, why: `scan: not found among the ${newest.length} newest elements`};
 }
 
-/** Pixel rectangle around points, padded, clamped to the page. */
-function paddedRect(points: P[], pad: number, ps: Size) {
-  return {
-    left: Math.max(0, Math.floor(Math.min(...points.map(p => p.x)) - pad)),
-    top: Math.max(0, Math.floor(Math.min(...points.map(p => p.y)) - pad)),
-    right: Math.min(ps.width, Math.ceil(Math.max(...points.map(p => p.x)) + pad)),
-    bottom: Math.min(ps.height, Math.ceil(Math.max(...points.map(p => p.y)) + pad)),
-  };
-}
-
-type LassoRemoval = {found: boolean; removed: boolean; how: string};
-
-/**
- * Lasso deletion, the only removal that keeps Supernote's undo history.
- * Lassoes the stroke's area (padded by the pen width: a thick stroke overflows
- * its centre line), then looks for OUR stroke among the selection:
- * - not there: this was not a pen stroke (e.g. a lasso path), nothing is changed;
- * - alone: it is deleted;
- * - with other elements: it is left under the shape (never delete someone else's writing).
- */
-async function lassoRemove(el: Element, points: P[]): Promise<LassoRemoval> {
-  const target = await signatureOf(el);
-  const ps = await pageSize(el.pageNum);
-  if (!target || !ps || !points.length) {
-    return {found: false, removed: false, how: 'lasso: no stroke data or page size'};
-  }
-  const strokePad = Math.ceil((el.thickness || 0) / 100);
-  let lastHow = '';
-  for (const pad of [8 + strokePad, 24 + 2 * strokePad]) {
-    await PluginCommAPI.setLassoBoxState(2).catch(() => undefined); // drop any previous lasso
-    const lassoRes: any = await PluginCommAPI.lassoElements(paddedRect(points, pad, ps));
-    if (!ok<boolean>(lassoRes)) {
-      lastHow = `lasso failed: ${errorText(lassoRes)}`;
-      continue;
-    }
-    await PluginCommAPI.setLassoBoxState(1).catch(() => undefined); // hide the box: less flicker
-    const selected = ok<Element[]>(await PluginCommAPI.getLassoElements()) ?? [];
-    let ours = false;
-    for (const e of selected) {
-      ours = ours || (await matches(e, target));
-      if (e?.uuid) {
-        PluginCommAPI.recycleElement(e.uuid);
-      }
-    }
-    if (!ours) {
-      await PluginCommAPI.setLassoBoxState(2).catch(() => undefined);
-      lastHow = `lasso (pad ${pad}px): stroke not among ${selected.length} selected`;
-      continue;
-    }
-    if (selected.length > 1) {
-      await PluginCommAPI.setLassoBoxState(2).catch(() => undefined);
-      return {found: true, removed: false, how: `lasso: ${selected.length} elements in the area, stroke kept`};
-    }
-    const del: any = await PluginCommAPI.deleteLassoElements();
-    return ok<boolean>(del)
-      ? {found: true, removed: true, how: `lasso delete (pad ${pad}px)`}
-      : {found: true, removed: false, how: `lasso delete failed: ${errorText(del)}`};
-  }
-  return {found: false, removed: false, how: lastHow};
-}
-
 /** Delete by element number: works over writing, but resets the undo history. */
 async function deleteByNumber(el: Element): Promise<{ok: boolean; how: string}> {
   if (!(await ensureFileAccess())) {
@@ -385,23 +335,14 @@ async function deleteByNumber(el: Element): Promise<{ok: boolean; how: string}> 
 
 /**
  * Removes the hand-drawn stroke according to the "Stroke removal" setting.
- * `removed: false` means the stroke stays under the shape (keep mode, or lasso
- * mode when other elements share the area), which is not an error.
+ * `removed: false` with `ok: true` means the stroke stays under the shape (keep mode).
  */
-async function removeStroke(el: Element, points: P[]): Promise<{ok: boolean; removed: boolean; how: string}> {
-  switch (getSettings().replaceMode) {
-    case 'keep':
-      return {ok: true, removed: false, how: 'kept under the shape'};
-    case 'lasso': {
-      const r = await lassoRemove(el, points);
-      // Our stroke is not on the page: whatever was drawn, it was not a pen stroke.
-      return {ok: r.found, removed: r.removed, how: r.how};
-    }
-    case 'number': {
-      const r = await deleteByNumber(el);
-      return {ok: r.ok, removed: r.ok, how: r.how};
-    }
+async function removeStroke(el: Element): Promise<{ok: boolean; removed: boolean; how: string}> {
+  if (getSettings().replaceMode === 'keep') {
+    return {ok: true, removed: false, how: 'kept under the shape'};
   }
+  const r = await deleteByNumber(el);
+  return {ok: r.ok, removed: r.ok, how: r.how};
 }
 
 async function lassoActive(): Promise<boolean> {
@@ -423,7 +364,14 @@ async function handleStroke(el: Element) {
   if (!stroke) {
     return;
   }
-  // A lasso selection right after the pen lifts means the user was selecting, not drawing.
+  // Lasso paths arrive here too (penType 4): only strokes drawn with an ink pen are touched.
+  const origin = strokeOrigin(stroke.penType);
+  if (origin !== 'ink') {
+    const result = origin === 'lasso' ? 'lasso path: ignored' : `pen type ${stroke.penType} is not an ink pen: ignored`;
+    report({stillMs: 0, holdSource: 'clock', result, details: []});
+    return;
+  }
+  // Second guard: a lasso selection right after the pen lifts means the user was selecting.
   if (await lassoActive()) {
     report({stillMs: 0, holdSource: 'clock', result: 'lasso selection active: ignored', details: []});
     return;
@@ -445,7 +393,6 @@ async function handleStroke(el: Element) {
   const details: string[] = [];
   details.push(`stroke: pen ${stroke.penType}, color ${stroke.penColor}, thickness ${el.thickness}, #${el.numInPage}`);
   let shape: Shape | null = null;
-  let shapePoints: P[] = [];
   for (const set of await pointSets(el, size)) {
     const r = recognize(set.points, {
       tolerance: settings.tolerance,
@@ -456,7 +403,6 @@ async function handleStroke(el: Element) {
     details.push(describe(set.label, r));
     if (r.shape) {
       shape = shapeToPixels(r.shape, set.toPixel);
-      shapePoints = set.points.map(set.toPixel);
       break;
     }
     if (r.reason.startsWith('too small')) {
@@ -482,7 +428,7 @@ async function handleStroke(el: Element) {
     return;
   }
   // Remove the stroke first (per setting), then insert the shape; restore the stroke if insertion fails.
-  const deletion = await removeStroke(el, shapePoints);
+  const deletion = await removeStroke(el);
   details.push(`removal: ${deletion.how}`);
   if (!deletion.ok) {
     report({stillMs, holdSource, result: 'not snapped: the stroke was not found on the page', details});

@@ -40,13 +40,14 @@ The **Last stroke** box shows three things:
 
   | Mode | Stroke | Undo history |
   |---|---|---|
-  | `lasso` (default) | deleted via a lasso (`deleteLassoElements`) when it is alone in its area, otherwise kept; brief flicker. If the stroke cannot be found on the page (e.g. it was a lasso path), no shape is created | kept |
+  | `number` (default) | deleted by element number (`deletePageElements`), even when drawn over writing or other shapes; needs file access. Only the stroke that matches (ink pen, same first and last point) is ever deleted | **reset** |
   | `keep` | left under the shape | kept |
-  | `number` | always deleted by element number (`deletePageElements`), even over writing or shapes; needs file access | **reset** |
 
   Measured on a Manta (3.29 beta): `deletePageElements` and `modifyPageElements` clear Supernote's undo history, while `insertGeometry` and lasso operations keep it.
+
+  An earlier `lasso` mode deleted the stroke through a plugin-driven lasso to keep the undo history. It was removed in 0.9.0: it left the stroke behind whenever the shape was drawn over writing, and driving the lasso could clash with the user's own lasso selection. Saved `lasso` settings switch to `number`.
 - If the file or page changes while a stroke is being processed, the plugin cancels without editing anything.
-- **Lasso tool:** if a lasso selection exists when the pen lifts, the stroke was a selection, not a drawing, and it is ignored.
+- **Lasso tool:** the host sends lasso paths through the same pen-up event, as a stroke with `penType` 4 (measured on a Manta, undocumented). While the lasso tool is active, the lasso APIs (`getLassoRect`…) answer "not allowed" (code 102), so they cannot detect it. ShapeSnap therefore only touches strokes drawn with a documented ink pen (`penType` 1, 10, 11 or 15, `src/guard.ts`); anything else is ignored. As a second guard, a stroke is also ignored when a lasso selection exists when the pen lifts. The plugin never drives the lasso itself.
 - **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape).
 - **Timeout:** each stroke is processed within 8 s, so a stuck host call can never block the following strokes.
 
@@ -54,7 +55,7 @@ The **Last stroke** box shows three things:
 
 1. Download `ShapeSnap.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-shapesnap/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
 2. Open **Settings → Apps → Plugins → Add plugin**.
-3. The `number` removal mode asks for file access on first use (**Always allow**). The other modes need no permission.
+3. The first snapped shape asks for file access (**Always allow**), needed to delete the hand-drawn stroke. The `keep` mode needs no permission.
 
 To build from source:
 

@@ -85,6 +85,7 @@ describe('rectangles', () => {
     expect(res.shape?.kind).toBe('rect');
     expect(Math.abs(res.metrics!.angle)).toBeGreaterThan(15);
   });
+  test('page-sized rectangle is still a rectangle', () => expect(kind(hand(rect(40, 40, 1360, 1820), 10))).toBe('rect'));
   test('counter-clockwise, starting bottom-right', () =>
     expect(kind(hand(polyline([{x: 700, y: 400}, {x: 700, y: 100}, {x: 100, y: 100}, {x: 100, y: 400}, {x: 690, y: 400}]), 6))).toBe('rect'));
 });
