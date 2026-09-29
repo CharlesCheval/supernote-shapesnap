@@ -381,9 +381,10 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
     const reasons = [why];
     const tries: [boolean, () => {shape: Shape | null; reason: string}][] = [
       [opts.arrow, () => recognizeArrow(path, opts.minSize, k, opts.arrowSnapDegrees)],
-      [opts.brace, () => recognizeBrace(path, opts.minSize, k)],
-      [opts.sqrt, () => recognizeSqrt(path, opts.minSize, k)],
+      // Axes and square roots before braces: an "L" or a "√" also has a sharp middle.
       [opts.axes, () => recognizeAxes(path, opts.minSize, k)],
+      [opts.sqrt, () => recognizeSqrt(path, opts.minSize, k)],
+      [opts.brace, () => recognizeBrace(path, opts.minSize, k)],
     ];
     for (const [enabled, attempt] of tries) {
       if (!enabled) {

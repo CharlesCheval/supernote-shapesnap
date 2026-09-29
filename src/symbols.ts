@@ -37,31 +37,47 @@ function snapUnit(a: P, b: P, maxDeg: number): P {
 // Curly brace
 // ---------------------------------------------------------------------------
 
+/** Largest direction change (degrees) at each point, over `w` points on each side. */
+function turns(path: P[], w: number): number[] {
+  return path.map((p, i) => {
+    if (i < w || i + w >= path.length) {
+      return 0;
+    }
+    const a1 = Math.atan2(p.y - path[i - w].y, p.x - path[i - w].x);
+    const a2 = Math.atan2(path[i + w].y - p.y, path[i + w].x - p.x);
+    let d = Math.abs(a2 - a1);
+    if (d > Math.PI) {
+      d = 2 * Math.PI - d;
+    }
+    return deg(d);
+  });
+}
+
 /**
- * A brace goes from one end to the other (the chord) and bulges to one side:
- * both arms run parallel to the chord at about half the depth, and the middle
- * comes to a sharp point at full depth. This tells it apart from an arc "("
- * (no sharp point, no flat arms) and from a "V" (no flat arms).
+ * A brace goes from one end to the other (the chord) and bulges to one side,
+ * with a sharp feature in the middle: the point of a textbook brace, the small
+ * zigzag between two "(" arcs, or the vertex of a quick "<". This sets it apart
+ * from an arc "(" (smooth all along) and from an "S" (both sides).
  */
 export function recognizeBrace(path: P[], minSize: number, k: number): Result {
   const s = path[0];
   const e = path[path.length - 1];
   const len = dist(s, e);
-  if (len < minSize) {
+  if (len < 1.5 * minSize) {
     return {shape: null, reason: 'brace: too short'};
   }
   const u = {x: (e.x - s.x) / len, y: (e.y - s.y) / len};
   const along = path.map(p => (p.x - s.x) * u.x + (p.y - s.y) * u.y);
   const lat = path.map(p => (p.x - s.x) * -u.y + (p.y - s.y) * u.x);
 
-  // It must progress from one end to the other (small curls at the ends allowed).
+  // It must progress from one end to the other (curls and the middle zigzag allowed).
   let furthest = -Infinity;
   let back = 0;
   for (const a of along) {
     furthest = Math.max(furthest, a);
     back = Math.max(back, furthest - a);
   }
-  if (back > 0.1 * len) {
+  if (back > 0.15 * len) {
     return {shape: null, reason: 'brace: goes back and forth'};
   }
 
@@ -73,51 +89,40 @@ export function recognizeBrace(path: P[], minSize: number, k: number): Result {
   }
   const side = Math.sign(lat[m]) || 1;
   const depth = Math.abs(lat[m]);
-  if (depth < 0.05 * len || depth > 0.45 * len) {
-    return {shape: null, reason: 'brace: wrong depth'};
+  if (depth < 0.06 * len || depth > 0.4 * len) {
+    return {shape: null, reason: `brace: depth ${Math.round((100 * depth) / len)}% of its length`};
   }
-  if (Math.min(...lat.map(v => v * side)) < -0.25 * depth) {
+  if (Math.min(...lat.map(v => v * side)) < -0.2 * depth) {
     return {shape: null, reason: 'brace: bulges on both sides'};
   }
-  const peakAt = along[m] / len;
-  if (peakAt < 0.3 || peakAt > 0.7) {
-    return {shape: null, reason: 'brace: point not in the middle'};
-  }
 
-  // Sharp point in the middle.
-  const w = 6;
-  const before = path[Math.max(0, m - w)];
-  const after = path[Math.min(path.length - 1, m + w)];
-  const a1 = Math.atan2(path[m].y - before.y, path[m].x - before.x);
-  const a2 = Math.atan2(after.y - path[m].y, after.x - path[m].x);
-  let turn = Math.abs(a2 - a1);
-  if (turn > Math.PI) {
-    turn = 2 * Math.PI - turn;
+  // Sharp feature in the middle (40–60% of the length: braces are symmetric).
+  const t = turns(path, 5);
+  let peak = -1;
+  for (let i = 0; i < path.length; i++) {
+    const f = along[i] / len;
+    if (f >= 0.4 && f <= 0.6 && (peak < 0 || t[i] > t[peak])) {
+      peak = i;
+    }
   }
-  if (deg(turn) < 45) {
+  if (peak < 0 || t[peak] < 35 / k) {
     return {shape: null, reason: 'brace: no point in the middle'};
   }
-
-  // Flat arms: the side offset barely changes along each arm.
-  const offsetAt = (f: number) => {
-    const near = lat.filter((_, i) => Math.abs(along[i] - f * len) <= 0.05 * len).map(v => v * side);
-    return near.length ? near.reduce((x, y) => x + y, 0) / near.length : NaN;
-  };
-  const arms = [
-    [0.2, 0.4],
-    [0.6, 0.8],
-  ].map(([f1, f2]) => Math.abs(offsetAt(f1) - offsetAt(f2)) / depth);
-  if (arms.some(d => !(d <= 0.3 * k))) {
-    return {shape: null, reason: 'brace: arms not straight'};
-  }
-  if ([0.15, 0.85].some(f => !(offsetAt(f) >= 0.25 * depth))) {
-    return {shape: null, reason: 'brace: ends do not curl'};
+  // Smooth arms (curled ends allowed): a "W" or a zigzag has sharp turns there.
+  // The middle feature itself may stick out or sit back near the chord
+  // (two "(" arcs joined by a notch).
+  const sharpArms = t.filter((v, i) => {
+    const f = along[i] / len;
+    return v > 50 && ((f > 0.1 && f < 0.38) || (f > 0.62 && f < 0.9));
+  }).length;
+  if (sharpArms > 3) {
+    return {shape: null, reason: 'brace: arms not smooth'};
   }
 
   // Clean brace, straightened to the page axes when close to them.
   const dir = snapUnit(s, e, 12);
   const normal = {x: -dir.y * side, y: dir.x * side};
-  const pts = braceOutline(len, Math.min(Math.max(depth, 0.08 * len), 0.25 * len)).map(q => ({
+  const pts = braceOutline(len, Math.min(Math.max(depth, 0.1 * len), 0.22 * len)).map(q => ({
     x: s.x + q.x * dir.x + q.y * normal.x,
     y: s.y + q.x * dir.y + q.y * normal.y,
   }));
@@ -146,9 +151,10 @@ export function braceOutline(len: number, depth: number, stepsPerQuarter = 8): P
 // ---------------------------------------------------------------------------
 
 /**
- * √ drawn upright in one stroke: a short stroke down to the lowest point,
- * a long straight rise, then a horizontal bar to the right. The bar keeps the
- * drawn length, so it covers what is written under it.
+ * √ drawn upright in one stroke: a short entry down to the lowest point (any
+ * shape: straight, "‾|", hooked), a long rise, then a bar to the right. The
+ * corner at the top of the rise is the point farthest from the bottom → end
+ * line. The bar keeps the drawn length, so it covers what is written under it.
  */
 export function recognizeSqrt(path: P[], minSize: number, k: number): Result {
   let b = 0;
@@ -159,60 +165,60 @@ export function recognizeSqrt(path: P[], minSize: number, k: number): Result {
   }
   const low = path[b];
   const end = path[path.length - 1];
-  const h = low.y - end.y;
-  if (b === 0 || b === path.length - 1 || h < 0.5 * minSize) {
+  if (b === 0 || b >= path.length - 2) {
     return {shape: null, reason: 'sqrt: no rise'};
   }
-  // Corner at the top of the rise: first point after the bottom that reaches the bar height.
-  const barY = end.y;
-  const tol = 0.15 * k * h;
-  let t = b;
-  while (t < path.length - 1 && path[t].y > barY + tol) {
-    t++;
-  }
-  const top = path[t];
-  const bar = path.slice(t);
-  const barLen = end.x - top.x;
-  if (barLen < 0.3 * h) {
-    return {shape: null, reason: 'sqrt: no bar'};
-  }
-  if (bar.some(p => Math.abs(p.y - barY) > tol) || maxDeviation(bar, top, end) > tol) {
-    return {shape: null, reason: 'sqrt: bar not straight'};
-  }
-  const rise = path.slice(b, t + 1);
-  const riseAngle = deg(Math.atan2(low.y - top.y, top.x - low.x));
-  if (riseAngle < 45 || riseAngle > 89) {
-    return {shape: null, reason: `sqrt: rise at ${Math.round(riseAngle)}°`};
-  }
-  if (maxDeviation(rise, low, top) > 0.12 * k * dist(low, top)) {
-    return {shape: null, reason: 'sqrt: rise not straight'};
-  }
-  // Left stroke: from its highest point down to the bottom, going right.
-  const lead = path.slice(0, b + 1);
-  let s = 0;
-  for (let i = 1; i < lead.length; i++) {
-    if (lead[i].y < lead[s].y) {
-      s = i;
+  let t = b + 1;
+  for (let i = b + 1; i < path.length - 1; i++) {
+    if (maxDeviation([path[i]], low, end) > maxDeviation([path[t]], low, end)) {
+      t = i;
     }
   }
-  const start = lead[s];
-  const tick = dist(start, low);
-  if (start.x >= low.x || tick < 0.1 * h || tick > 0.8 * h) {
-    return {shape: null, reason: 'sqrt: no left stroke'};
+  const top = path[t];
+  const h = low.y - top.y;
+  if (h < 0.5 * minSize) {
+    return {shape: null, reason: 'sqrt: rise too short'};
   }
-  if (start.y < top.y + 0.2 * h) {
-    return {shape: null, reason: 'sqrt: left stroke too high'};
+  // Bar: long, roughly horizontal, roughly straight.
+  const barLen = end.x - top.x;
+  if (barLen < 0.4 * h) {
+    return {shape: null, reason: 'sqrt: no bar'};
   }
-  if (lead.some(p => p.x > low.x + 0.1 * h)) {
-    return {shape: null, reason: 'sqrt: left stroke goes right of the bottom'};
+  if (deg(Math.atan2(Math.abs(end.y - top.y), barLen)) > 12 * k) {
+    return {shape: null, reason: 'sqrt: bar not horizontal'};
   }
-  if (maxDeviation(lead.slice(s), start, low) > 0.25 * k * tick) {
-    return {shape: null, reason: 'sqrt: left stroke not straight'};
+  if (maxDeviation(path.slice(t), top, end) > 0.1 * k * Math.max(barLen, h)) {
+    return {shape: null, reason: 'sqrt: bar not straight'};
   }
-  // Clean radical: a small serif, the left stroke, the rise, a horizontal bar.
-  const serif = {x: start.x - 0.15 * tick, y: start.y + 0.1 * tick};
-  const corner = {x: top.x, y: barY};
-  return {shape: {kind: 'sqrt', points: [serif, start, low, corner, {x: end.x, y: barY}]}, reason: 'sqrt'};
+  // Rise: straight, steep (up to slightly leaning back).
+  const riseAngle = deg(Math.atan2(h, top.x - low.x));
+  if (riseAngle < 45 || riseAngle > 105) {
+    return {shape: null, reason: `sqrt: rise at ${Math.round(riseAngle)}°`};
+  }
+  if (maxDeviation(path.slice(b, t + 1), low, top) > 0.15 * k * dist(low, top)) {
+    return {shape: null, reason: 'sqrt: rise not straight'};
+  }
+  // Entry: short, starting left of the bottom, staying below the bar and near the bottom.
+  const lead = path.slice(0, b + 1);
+  let leadLen = 0;
+  for (let i = 1; i < lead.length; i++) {
+    leadLen += dist(lead[i - 1], lead[i]);
+  }
+  if (leadLen < 0.1 * h || leadLen > 2 * h) {
+    return {shape: null, reason: 'sqrt: no short entry stroke'};
+  }
+  if (path[0].x >= low.x || lead.some(p => p.x > low.x + 0.3 * h || p.y < top.y + 0.15 * h)) {
+    return {shape: null, reason: 'sqrt: entry stroke out of place'};
+  }
+  // Clean radical of textbook proportions: the tick keeps a modest size on tall roots.
+  const tick = Math.min(0.45 * h, 70);
+  const start = {x: low.x - 0.55 * tick, y: low.y - tick};
+  const serif = {x: start.x - 0.25 * tick, y: start.y + 0.12 * tick};
+  const barY = top.y;
+  return {
+    shape: {kind: 'sqrt', points: [serif, start, low, {x: top.x, y: barY}, {x: end.x, y: barY}]},
+    reason: 'sqrt',
+  };
 }
 
 // ---------------------------------------------------------------------------

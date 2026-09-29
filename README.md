@@ -8,7 +8,7 @@ Draw a **rectangle**, a **circle**, an **arrow**, a **curly brace**, a **square 
 - **Rectangles:** strokes tilted less than 12° are snapped to the page axes. Beyond that, the rectangle keeps its tilt.
 - **Arrows:** draw a straight line, then its head at the end, without lifting the pen (a triangle, a V, or barb → tip → barb). The result is a clean shaft with a solid triangular head whose size depends only on the pen width, never on the drawn head. A shaft within the **Arrow snapping** angle (default 8°) of horizontal or vertical is snapped to it; otherwise it keeps its direction.
 - **Curly braces:** `{`, `}`, over- or under-braces, in one stroke. The clean brace keeps the drawn length and depth, and is straightened when within 12° of the page axes.
-- **Square roots:** a √ drawn upright in one stroke (short stroke down, long rise, bar to the right). The bar keeps the drawn length, so it covers what is written under it, however tall.
+- **Square roots:** a √ drawn upright in one stroke (short entry, long rise, bar to the right). The bar keeps the drawn length, so it covers what is written under it, however tall.
 - **Coordinate axes:** draw an "L" (one vertical and one horizontal leg, each at least 90 px). The corner becomes the origin; each leg becomes an axis in the direction it was drawn, with a tick every 5 mm and a solid arrow head.
 - **Normal writing:** a stroke without a pause is left untouched.
 
@@ -42,9 +42,9 @@ The **Last stroke** box shows three things:
   - A circle (least squares) and a minimum-area rectangle are fitted to the loop.
   - It is a rectangle if there are about 4 corners and a small rectangle error. It is a circle if there are no corners and a small circle error.
   - Otherwise, open shapes are tried in turn (`src/symbols.ts` for the maths ones):
-    - brace: the stroke bulges to one side of its start → end chord, with flat arms at about half depth and a sharp point in the middle (an arc or a "<" is rejected);
-    - square root: lowest point, then a straight rise at 45–89°, then a horizontal bar to the right, with a short straight stroke before the lowest point (a check mark has no bar and is rejected);
-    - axes: two straight legs at a right angle, within 7° of the page axes;
+    - brace: the stroke bulges to one side of its start → end chord (depth 6–40% of its length) and has a sharp feature in the middle (40–60% of the length) with smooth arms: a textbook point, a notch between two "(" arcs, or the vertex of a quick "<". An arc "(" (no sharp middle), an "S" (both sides) and a "W" (sharp arms) are rejected;
+    - square root: the lowest point, then a straight rise at 45–105° up to the corner (the point farthest from the bottom → end line), then a roughly horizontal bar to the right; before the lowest point, a short entry of any shape ("‾|", hooked, straight) staying left of it and below the bar. A check mark has no bar and is rejected. The clean radical has textbook proportions, its bar horizontal at the corner height;
+    - axes: two straight legs at a right angle, within 7° of the page axes (tried before the brace and the square root, which also have a sharp middle);
   - an arrow: the tip is the first point farthest from the start; the start → tip shaft must be straight (slight bowing allowed); what is drawn after the tip must be small, go back behind the tip and reach both sides of the shaft. The whole arrow is one polyline (`GEO_polygon`), 30° barbs, length `30 px + 4 px per pen pixel`. Geometries cannot be filled, so the polyline zigzags across the head with rungs closer than the line width, which merge into a solid head.
 - **Replacement:** the shape is inserted with `insertGeometry`. What happens to the hand-drawn stroke depends on the **Stroke removal** setting:
 
