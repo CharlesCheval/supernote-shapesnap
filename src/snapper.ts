@@ -158,10 +158,10 @@ function describe(label: string, r: Recognition): string {
 /**
  * Arrow head length (px), set by the pen width only, never by the drawn head.
  * Pen widths are about 100 units per pixel of line (0.5 pen ≈ 600 ≈ 6 px):
- * 0.2 → 42 px, 0.5 → 54 px, 1.0 → 78 px, 2.0 → 126 px.
+ * 0.2 → 34 px, 0.5 → 43 px, 1.0 → 62 px, 2.0 → 101 px.
  */
 function arrowHeadLength(penWidth: number): number {
-  return Math.round(Math.min(160, 30 + (4 * penWidth) / 100));
+  return Math.round(Math.min(130, 24 + (3.2 * penWidth) / 100));
 }
 
 /** Tick spacing of drawn axes (px): about 5 mm on a 300 ppi screen, like a 5 mm grid. */
