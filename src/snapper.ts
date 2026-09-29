@@ -2,6 +2,7 @@ import {Element, PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, Poi
 import {isInk, strokeOrigin} from './guard';
 import {HoldTracker, PenMotion} from './hold';
 import {P, Recognition, Shape, arrowPoints, recognize, trailingStillCount} from './recognize';
+import {axisPoints} from './symbols';
 import {getSettings} from './settings';
 
 /**
@@ -129,6 +130,12 @@ function shapeToPixels(shape: Shape, toPixel: (p: P) => P): Shape {
   if (shape.kind === 'arrow') {
     return {kind: 'arrow', tail: toPixel(shape.tail), tip: toPixel(shape.tip)};
   }
+  if (shape.kind === 'brace' || shape.kind === 'sqrt') {
+    return {kind: shape.kind, points: shape.points.map(toPixel)};
+  }
+  if (shape.kind === 'axes') {
+    return {kind: 'axes', origin: toPixel(shape.origin), xEnd: toPixel(shape.xEnd), yEnd: toPixel(shape.yEnd)};
+  }
   const center = toPixel({x: shape.cx, y: shape.cy});
   const rx = toPixel({x: shape.cx + shape.r, y: shape.cy});
   const ry = toPixel({x: shape.cx, y: shape.cy + shape.r});
@@ -157,50 +164,74 @@ function arrowHeadLength(penWidth: number): number {
   return Math.round(Math.min(160, 30 + (4 * penWidth) / 100));
 }
 
-function geometryFor(shape: Shape, pen: {type: number; color: number; width: number}, lasso: boolean) {
+/** Tick spacing of drawn axes (px): about 5 mm on a 300 ppi screen, like a 5 mm grid. */
+const AXIS_TICK_SPACING = 59;
+
+type Pen = {type: number; color: number; width: number};
+
+/** Geometries to insert for a shape (axes need two: one per axis). */
+function geometriesFor(shape: Shape, pen: Pen, lasso: boolean): object[] {
   const base = {
-    showLassoAfterInsert: lasso,
     penColor: pen.color,
     penType: pen.type,
     penWidth: Math.max(100, pen.width),
   };
-  if (shape.kind === 'arrow') {
-    // One polyline: shaft, triangular head, then rungs that fill the head.
-    // Fill rungs well under the line width (about penWidth / 100 px, less for thin pens).
-    const spacing = Math.max(2, (0.4 * base.penWidth) / 100);
-    const pts = arrowPoints(shape.tail, shape.tip, arrowHeadLength(base.penWidth), spacing);
-    return {
-      ...base,
-      type: 'GEO_polygon',
-      points: pts.map(p => ({x: Math.round(p.x), y: Math.round(p.y)})),
-      ellipseCenterPoint: null,
-      ellipseMajorAxisRadius: 0,
-      ellipseMinorAxisRadius: 0,
-      ellipseAngle: 0,
-    };
-  }
-  if (shape.kind === 'circle') {
-    return {
-      ...base,
-      type: 'GEO_circle',
-      points: [],
-      ellipseCenterPoint: {x: Math.round(shape.cx), y: Math.round(shape.cy)},
-      ellipseMajorAxisRadius: Math.round(shape.r),
-      ellipseMinorAxisRadius: Math.round(shape.r),
-      ellipseAngle: 0,
-    };
-  }
-  const pts = shape.corners.map(p => ({x: Math.round(p.x), y: Math.round(p.y)}));
-  return {
+  const polyline = (pts: P[], select: boolean) => ({
     ...base,
+    showLassoAfterInsert: select,
     type: 'GEO_polygon',
-    points: [...pts, pts[0]],
+    points: pts.map(p => ({x: Math.round(p.x), y: Math.round(p.y)})),
     ellipseCenterPoint: null,
     ellipseMajorAxisRadius: 0,
     ellipseMinorAxisRadius: 0,
     ellipseAngle: 0,
-  };
+  });
+  // Head length and fill spacing from the pen width (about penWidth / 100 px of line).
+  const head = arrowHeadLength(base.penWidth);
+  const fill = Math.max(2, (0.4 * base.penWidth) / 100);
+  switch (shape.kind) {
+    case 'arrow':
+      // One polyline: shaft, triangular head, then rungs that fill the head.
+      return [polyline(arrowPoints(shape.tail, shape.tip, head, fill), lasso)];
+    case 'brace':
+    case 'sqrt':
+      return [polyline(shape.points, lasso)];
+    case 'axes': {
+      // Each axis: ticks drawn out and back along it, then a filled arrow head.
+      const tick = Math.max(8, (2 * base.penWidth) / 100);
+      const axis = (end: P) => {
+        const pts = axisPoints(shape.origin, end, AXIS_TICK_SPACING, tick, head);
+        return [...pts.slice(0, -1), ...arrowPoints(pts[pts.length - 2], end, head, fill).slice(1)];
+      };
+      // No lasso: it would only select one of the two axes.
+      return [polyline(axis(shape.xEnd), false), polyline(axis(shape.yEnd), false)];
+    }
+    case 'circle':
+      return [
+        {
+          ...base,
+          showLassoAfterInsert: lasso,
+          type: 'GEO_circle',
+          points: [],
+          ellipseCenterPoint: {x: Math.round(shape.cx), y: Math.round(shape.cy)},
+          ellipseMajorAxisRadius: Math.round(shape.r),
+          ellipseMinorAxisRadius: Math.round(shape.r),
+          ellipseAngle: 0,
+        },
+      ];
+    case 'rect':
+      return [polyline([...shape.corners, shape.corners[0]], lasso)];
+  }
 }
+
+const CREATED: Record<Shape['kind'], string> = {
+  rect: '▭ rectangle created',
+  circle: '◯ circle created',
+  arrow: '→ arrow created',
+  brace: '{ brace created',
+  sqrt: '√ square root created',
+  axes: '⊥ axes created',
+};
 
 // ---------------------------------------------------------------------------
 // Stroke handling
@@ -428,6 +459,9 @@ async function handleStroke(el: Element) {
       circle: settings.circle,
       arrow: settings.arrow,
       arrowSnapDegrees: settings.arrowSnapDegrees,
+      brace: settings.brace,
+      sqrt: settings.sqrt,
+      axes: settings.axes,
     });
     details.push(describe(set.label, r));
     if (r.shape) {
@@ -467,7 +501,17 @@ async function handleStroke(el: Element) {
     report({stillMs, holdSource, result: 'cancelled: file or page changed after deleting the stroke', details});
     return;
   }
-  const inserted = ok<boolean>(await PluginCommAPI.insertGeometry(geometryFor(shape, pen, settings.lassoAfter) as any));
+  let inserted = 0;
+  const geometries = geometriesFor(shape, pen, settings.lassoAfter);
+  for (const g of geometries) {
+    if (!ok<boolean>(await PluginCommAPI.insertGeometry(g as any))) {
+      break;
+    }
+    inserted++;
+  }
+  if (inserted < geometries.length) {
+    details.push(`inserted ${inserted} of ${geometries.length} geometries`);
+  }
   if (!inserted) {
     if (deletion.removed) {
       await PluginCommAPI.insertPageElements([el], el.pageNum, el.layerNum);
@@ -475,8 +519,7 @@ async function handleStroke(el: Element) {
     report({stillMs, holdSource, result: 'failed: shape not inserted, stroke restored', details});
     return;
   }
-  const created = {rect: '▭ rectangle created', circle: '◯ circle created', arrow: '→ arrow created'}[shape.kind];
-  report({stillMs, holdSource, result: created, details});
+  report({stillMs, holdSource, result: CREATED[shape.kind], details});
 }
 
 let queue: Promise<void> = Promise.resolve();

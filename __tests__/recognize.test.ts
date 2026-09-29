@@ -1,6 +1,16 @@
 import {P, arrowPoints, recognize, snapDirection, trailingStillCount} from '../src/recognize';
 
-const opts = {tolerance: 3, minSize: 60, rect: true, circle: true, arrow: true, arrowSnapDegrees: 8};
+const opts = {
+  tolerance: 3,
+  minSize: 60,
+  rect: true,
+  circle: true,
+  arrow: true,
+  arrowSnapDegrees: 8,
+  brace: true,
+  sqrt: true,
+  axes: true,
+};
 
 /** Deterministic low-frequency wobble + noise, like a real hand. */
 function hand(points: P[], amp: number, seed = 7): P[] {
@@ -107,7 +117,8 @@ describe('circles', () => {
 describe('rejected', () => {
   test('triangle', () =>
     expect(kind(polyline([{x: 200, y: 700}, {x: 500, y: 200}, {x: 800, y: 700}, {x: 205, y: 695}]))).toBeNull());
-  test('open L-shaped stroke', () => expect(kind(polyline([{x: 100, y: 100}, {x: 600, y: 100}, {x: 600, y: 500}]))).toBeNull());
+  test('open L-shaped stroke, axes off', () =>
+    expect(kind(polyline([{x: 100, y: 100}, {x: 600, y: 100}, {x: 600, y: 500}]), {...opts, axes: false})).toBeNull());
   test('straight line', () => expect(kind(polyline([{x: 100, y: 100}, {x: 800, y: 120}]))).toBeNull());
   test('very flat ellipse', () => expect(kind(arc(500, 500, 400, 110, 1.02))).toBeNull());
   test('handwriting-sized loop', () => expect(recognize(arc(100, 100, 15, 15, 1.05), opts).reason).toMatch(/too small/));

@@ -19,6 +19,12 @@ export type Settings = {
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
   arrowSnapDegrees: number;
+  /** Curly brace, in any of the four directions. */
+  brace: boolean;
+  /** Square root sign, its bar as long as drawn. */
+  sqrt: boolean;
+  /** Coordinate axes, drawn as an "L". */
+  axes: boolean;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
   /**
@@ -43,6 +49,9 @@ export const DEFAULTS: Settings = {
   circle: true,
   arrow: true,
   arrowSnapDegrees: 8,
+  brace: true,
+  sqrt: true,
+  axes: true,
   lassoAfter: true,
   replaceMode: 'number',
 };

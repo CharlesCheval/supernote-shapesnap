@@ -36,7 +36,7 @@ function Stepper({label, hint, k, unit}: {label: string; hint: string; k: NumKey
   );
 }
 
-function Toggle({label, hint, k}: {label: string; hint?: string; k: 'enabled' | 'rect' | 'circle' | 'arrow' | 'lassoAfter'}) {
+function Toggle({label, hint, k}: {label: string; hint?: string; k: 'enabled' | 'lassoAfter'}) {
   const on = getSettings()[k];
   return (
     <View style={styles.row}>
@@ -47,6 +47,41 @@ function Toggle({label, hint, k}: {label: string; hint?: string; k: 'enabled' | 
       <Pressable style={[styles.toggle, on && styles.toggleOn]} onPress={() => updateSettings({[k]: !on})}>
         <Text style={[styles.btnText, on && styles.toggleOnText]}>{on ? 'On' : 'Off'}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+type ShapeKey = 'rect' | 'circle' | 'arrow' | 'brace' | 'sqrt' | 'axes';
+
+/**
+ * Shape icons drawn with plain views and ASCII / common glyphs, so they render
+ * whatever fonts the device has. `c` is the ink colour (inverted when selected).
+ */
+function ShapeIcon({k, c}: {k: ShapeKey; c: string}) {
+  switch (k) {
+    case 'rect':
+      return <View style={[styles.iconRect, {borderColor: c}]} />;
+    case 'circle':
+      return <View style={[styles.iconCircle, {borderColor: c}]} />;
+    case 'axes':
+      return <View style={[styles.iconAxes, {borderColor: c}]} />;
+    default:
+      return <Text style={[styles.iconGlyph, {color: c}]}>{{arrow: '→', brace: '{', sqrt: '√'}[k]}</Text>;
+  }
+}
+
+const SHAPES: ShapeKey[] = ['rect', 'circle', 'arrow', 'brace', 'sqrt', 'axes'];
+
+/** One compact row: tap an icon to turn that shape on (black) or off (outlined, grey). */
+function ShapePicker() {
+  const s = getSettings();
+  return (
+    <View style={styles.shapes}>
+      {SHAPES.map(k => (
+        <Pressable key={k} style={[styles.shape, s[k] && styles.shapeOn]} onPress={() => updateSettings({[k]: !s[k]})}>
+          <ShapeIcon k={k} c={s[k] ? '#ffffff' : '#9d9d9d'} />
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -72,20 +107,14 @@ function App(): React.JSX.Element {
         </Pressable>
       </View>
       <Text style={styles.intro}>
-        Draw a rectangle, a circle or an arrow and lift the pen: it snaps into a perfect shape. Set a hold duration to require a short pause first.
+        Draw a shape and lift the pen: it snaps into a clean one. Tap the icons to choose which shapes are recognized.
       </Text>
 
       <Toggle label="Enabled" k="enabled" />
+      <ShapePicker />
       <Stepper label="Hold duration" hint="0 = snap as soon as the pen lifts · higher = pause required at the end" k="holdMs" unit="ms" />
       <Stepper label="Stillness" hint="Small jitter allowed during the hold" k="stillRadius" unit="px" />
       <Stepper label="Tolerance" hint="1 = neat drawing required · 5 = very lenient" k="tolerance" unit="/ 5" />
-      <Toggle label="Rectangles" k="rect" />
-      <Toggle label="Circles" hint="Always perfect, even from a slightly oval stroke" k="circle" />
-      <Toggle
-        label="Arrows"
-        hint="Draw a straight line and its head without lifting the pen · head size follows the pen width"
-        k="arrow"
-      />
       <Stepper
         label="Arrow snapping"
         hint="Arrows this close to horizontal or vertical are straightened · 0 = never · lower = more precise"
@@ -148,6 +177,21 @@ const styles = StyleSheet.create({
   value: {fontSize: 22, color: '#000000', minWidth: 110, textAlign: 'center'},
   toggle: {borderWidth: 2, borderColor: '#000000', borderRadius: 8, minWidth: 110, paddingVertical: 8, alignItems: 'center'},
   toggleOn: {backgroundColor: '#000000'},
+  shapes: {flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 20, borderBottomWidth: 1, borderColor: '#c9c9c9'},
+  shape: {
+    width: 84,
+    height: 84,
+    borderWidth: 2,
+    borderColor: '#9d9d9d',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shapeOn: {backgroundColor: '#000000', borderColor: '#000000'},
+  iconRect: {width: 46, height: 32, borderWidth: 4},
+  iconCircle: {width: 42, height: 42, borderRadius: 21, borderWidth: 4},
+  iconAxes: {width: 40, height: 40, borderLeftWidth: 4, borderBottomWidth: 4},
+  iconGlyph: {fontSize: 44, lineHeight: 52, fontWeight: '700'},
   toggleOnText: {color: '#ffffff'},
   measure: {marginTop: 28, padding: 16, borderWidth: 2, borderColor: '#000000', borderRadius: 8},
   detail: {fontSize: 15, lineHeight: 22, color: '#000000', marginTop: 8, fontFamily: 'monospace'},

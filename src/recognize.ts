@@ -13,12 +13,15 @@
  * without lifting the pen (see recognizeArrow).
  */
 
+import {SymbolShape, recognizeAxes, recognizeBrace, recognizeSqrt} from './symbols';
+
 export type P = {x: number; y: number};
 
 export type Shape =
   | {kind: 'rect'; corners: [P, P, P, P]}
   | {kind: 'circle'; cx: number; cy: number; r: number}
-  | {kind: 'arrow'; tail: P; tip: P};
+  | {kind: 'arrow'; tail: P; tip: P}
+  | SymbolShape;
 
 export type RecognizeOptions = {
   /** 1 (strict) to 5 (lenient). */
@@ -30,6 +33,9 @@ export type RecognizeOptions = {
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
   arrowSnapDegrees: number;
+  brace: boolean;
+  sqrt: boolean;
+  axes: boolean;
 };
 
 export type Metrics = {
@@ -370,16 +376,30 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   const rect = fitRect(loop);
   const metrics: Metrics = {width, height, gap, corners, rectErr: rect.err, circErr: circle.err, angle: rect.angle};
 
-  const tryArrow = (why: string): Recognition => {
-    if (!opts.arrow) {
-      return {shape: null, reason: why, metrics};
+  // Open shapes, tried in turn; the reasons of the misses are kept for the diagnostics.
+  const tryOpen = (why: string): Recognition => {
+    const reasons = [why];
+    const tries: [boolean, () => {shape: Shape | null; reason: string}][] = [
+      [opts.arrow, () => recognizeArrow(path, opts.minSize, k, opts.arrowSnapDegrees)],
+      [opts.brace, () => recognizeBrace(path, opts.minSize, k)],
+      [opts.sqrt, () => recognizeSqrt(path, opts.minSize, k)],
+      [opts.axes, () => recognizeAxes(path, opts.minSize, k)],
+    ];
+    for (const [enabled, attempt] of tries) {
+      if (!enabled) {
+        continue;
+      }
+      const r = attempt();
+      if (r.shape) {
+        return {shape: r.shape, reason: r.reason, metrics};
+      }
+      reasons.push(r.reason);
     }
-    const a = recognizeArrow(path, opts.minSize, k, opts.arrowSnapDegrees);
-    return {shape: a.shape, reason: a.shape ? a.reason : `${why}; ${a.reason}`, metrics};
+    return {shape: null, reason: reasons.join('; '), metrics};
   };
 
   if (gap > 0.25 * k) {
-    return tryArrow('shape not closed');
+    return tryOpen('shape not closed');
   }
   const rectOk =
     opts.rect &&
@@ -394,5 +414,5 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
     // Always a perfect circle, even from a slightly oval stroke.
     return {shape: {kind: 'circle', cx: circle.cx, cy: circle.cy, r: circle.r}, reason: 'circle', metrics};
   }
-  return tryArrow('shape not recognized');
+  return tryOpen('shape not recognized');
 }

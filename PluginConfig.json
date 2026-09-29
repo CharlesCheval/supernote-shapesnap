@@ -1,10 +1,10 @@
 {
   "name": "ShapeSnap",
-  "desc": "Draw a rectangle, a circle or an arrow: it snaps into a perfect shape.",
+  "desc": "Draw a rectangle, a circle, an arrow, a brace, a square root or axes: it snaps into a clean shape.",
   "author": "Charles Cheval",
   "iconPath": "assets/icon_shapes.png",
-  "versionName": "0.9.0-test.5",
-  "versionCode": "17",
+  "versionName": "0.9.0-test.6",
+  "versionCode": "18",
   "pluginID": "nhlqwjc2qwewoz9m",
   "pluginKey": "ShapeSnap",
   "jsMainPath": "index",
