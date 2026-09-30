@@ -33,6 +33,8 @@ export type RecognizeOptions = {
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
   arrowSnapDegrees: number;
+  /** Rectangles tilted less than this are straightened (default 12°). */
+  rectSnapDegrees?: number;
   brace: boolean;
   sqrt: boolean;
   axes: boolean;
@@ -191,7 +193,7 @@ const rotate = (p: P, a: number): P => ({
 });
 
 /** Minimum-area enclosing rectangle over rotations of ±45°, and the mean distance of points to its edges. */
-export function fitRect(pts: P[]) {
+export function fitRect(pts: P[], snapDegrees = SNAP_DEGREES) {
   let best = {area: Infinity, deg: 0, l: 0, t: 0, r: 0, b: 0};
   const box = (deg: number) => {
     const a = (-deg * Math.PI) / 180;
@@ -208,7 +210,7 @@ export function fitRect(pts: P[]) {
       best = c;
     }
   }
-  if (Math.abs(best.deg) <= SNAP_DEGREES) {
+  if (Math.abs(best.deg) <= snapDegrees) {
     best = box(0);
   }
   const a = (-best.deg * Math.PI) / 180;
@@ -373,7 +375,7 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
 
   const corners = countCorners(loop);
   const circle = fitCircle(loop);
-  const rect = fitRect(loop);
+  const rect = fitRect(loop, opts.rectSnapDegrees ?? SNAP_DEGREES);
   const metrics: Metrics = {width, height, gap, corners, rectErr: rect.err, circErr: circle.err, angle: rect.angle};
 
   // Open shapes, tried in turn; the reasons of the misses are kept for the diagnostics.

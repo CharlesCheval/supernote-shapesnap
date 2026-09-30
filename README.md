@@ -9,23 +9,25 @@ Draw a **rectangle**, a **circle**, an **arrow**, a **curly brace**, a **square 
 - **Arrows:** draw a straight line, then its head at the end, without lifting the pen (a triangle, a V, or barb → tip → barb). The result is a clean shaft with a solid triangular head whose size depends only on the pen width, never on the drawn head. A shaft within the **Arrow snapping** angle (default 8°) of horizontal or vertical is snapped to it; otherwise it keeps its direction.
 - **Curly braces:** `{`, `}`, over- or under-braces, in one stroke. The clean brace keeps the drawn length and depth, and is straightened when within 12° of the page axes.
 - **Square roots:** a √ drawn upright in one stroke (short entry, long rise, bar to the right). The bar keeps the drawn length, so it covers what is written under it, however tall.
-- **Coordinate axes:** draw an "L" (one vertical and one horizontal leg, each at least 90 px). The corner becomes the origin; each leg becomes an axis in the direction it was drawn, with a tick every 5 mm and a solid arrow head.
+- **Coordinate axes:** draw an "L" (one vertical and one horizontal leg, each at least 90 px). The corner becomes the origin; each leg becomes an axis in the direction it was drawn, with ticks (every 5 mm by default, drawn as a separate, thinner polyline) and a solid arrow head.
 - **Normal writing:** a stroke without a pause is left untouched.
 
 The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → ShapeSnap**.
 
 ## Settings
 
-| Setting | Purpose |
-|---|---|
-| Hold duration | Pause required at the end of the stroke, 0 to 1000 ms (default 0: snap as soon as the pen lifts) |
-| Stillness | Jitter allowed during the hold (default 12 px) |
-| Tolerance | How neat the drawing must be, 1 (strict) to 5 (lenient) |
-| Shape icons | Tap an icon to turn that shape on (black) or off (grey): rectangle, circle, arrow, brace, square root, axes |
-| Arrow snapping | Arrows within this angle of horizontal or vertical are straightened, 0 to 20° (default 8°, 0 = never) |
-| Select after snapping | Show the lasso on the new shape |
+One compact page. The **On / Off** switch in the header turns ShapeSnap off altogether. Then one row per shape: tap its icon to turn it on (black) or off (grey); the settings of that shape sit next to it.
 
-The **Last stroke** box shows three things:
+| Shape | Settings |
+|---|---|
+| Rectangle | **Straighten**: tilted less than this, it is set square to the page (0–20°, default 12°) |
+| Circle, brace, square root | — |
+| Arrow | **Head**: head size, % of the size set by the pen width (30–200 %, default 100 %) · **Straighten**: within this angle of horizontal / vertical, the shaft is straightened (0–20°, default 8°) |
+| Axes | **Head** (as for arrows) · **Tick width**: % of the axis line width (20–100 %, default 50 %) · **Tick every**: spacing in mm (2–20, default 5) |
+
+**General**: **Hold** (pause required at the end of the stroke, 0–1000 ms, default 0: snap as soon as the pen lifts), **Stillness** (jitter allowed during the hold, default 12 px), **Tolerance** (1 strict to 5 lenient), **Select after** (lasso the new shape, ready to resize), **Hand stroke** (Removed or Kept, see below). All settings are saved and survive restarts.
+
+The **Last stroke** lines, in small print at the bottom, show three things:
 
 - the measured hold duration;
 - the decision;

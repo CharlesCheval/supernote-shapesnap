@@ -164,20 +164,23 @@ function arrowHeadLength(penWidth: number): number {
   return Math.round(Math.min(130, 24 + (3.2 * penWidth) / 100));
 }
 
-/** Tick spacing of drawn axes (px): about 5 mm on a 300 ppi screen, like a 5 mm grid. */
-const AXIS_TICK_SPACING = 59;
+/** Screen pixels per millimetre (Manta: about 300 ppi). */
+const PX_PER_MM = 300 / 25.4;
 
 type Pen = {type: number; color: number; width: number};
 
-/** Geometries to insert for a shape (axes need two: one per axis). */
-function geometriesFor(shape: Shape, pen: Pen, lasso: boolean): object[] {
+type Look = {arrowHeadPct: number; axesHeadPct: number; axesTickWidthPct: number; axesTickMm: number};
+
+/** Geometries to insert for a shape (axes need four: each axis and its ticks). */
+function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): object[] {
   const base = {
     penColor: pen.color,
     penType: pen.type,
     penWidth: Math.max(100, pen.width),
   };
-  const polyline = (pts: P[], select: boolean) => ({
+  const polyline = (pts: P[], select: boolean, width = base.penWidth) => ({
     ...base,
+    penWidth: Math.max(100, Math.round(width)),
     showLassoAfterInsert: select,
     type: 'GEO_polygon',
     points: pts.map(p => ({x: Math.round(p.x), y: Math.round(p.y)})),
@@ -192,19 +195,27 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean): object[] {
   switch (shape.kind) {
     case 'arrow':
       // One polyline: shaft, triangular head, then rungs that fill the head.
-      return [polyline(arrowPoints(shape.tail, shape.tip, head, fill), lasso)];
+      return [polyline(arrowPoints(shape.tail, shape.tip, (head * look.arrowHeadPct) / 100, fill), lasso)];
     case 'brace':
     case 'sqrt':
       return [polyline(shape.points, lasso)];
     case 'axes': {
-      // Each axis: ticks drawn out and back along it, then a filled arrow head.
+      // Each axis: the line with its filled head, then its ticks as a separate,
+      // thinner polyline (drawn out and back across the axis, travelling along it
+      // underneath, where the thicker axis hides it).
+      const axisHead = (head * look.axesHeadPct) / 100;
       const tick = Math.max(8, (2 * base.penWidth) / 100);
-      const axis = (end: P) => {
-        const pts = axisPoints(shape.origin, end, AXIS_TICK_SPACING, tick, head);
-        return [...pts.slice(0, -1), ...arrowPoints(pts[pts.length - 2], end, head, fill).slice(1)];
-      };
-      // No lasso: it would only select one of the two axes.
-      return [polyline(axis(shape.xEnd), false), polyline(axis(shape.yEnd), false)];
+      const tickWidth = (base.penWidth * look.axesTickWidthPct) / 100;
+      const out: object[] = [];
+      for (const end of [shape.xEnd, shape.yEnd]) {
+        // No lasso: it would only select one of the pieces.
+        out.push(polyline(arrowPoints(shape.origin, end, axisHead, fill), false));
+        const ticks = axisPoints(shape.origin, end, look.axesTickMm * PX_PER_MM, tick, axisHead).slice(0, -1);
+        if (ticks.length > 1) {
+          out.push(polyline(ticks, false, tickWidth));
+        }
+      }
+      return out;
     }
     case 'circle':
       return [
@@ -459,6 +470,7 @@ async function handleStroke(el: Element) {
       circle: settings.circle,
       arrow: settings.arrow,
       arrowSnapDegrees: settings.arrowSnapDegrees,
+      rectSnapDegrees: settings.rectSnapDegrees,
       brace: settings.brace,
       sqrt: settings.sqrt,
       axes: settings.axes,
@@ -502,7 +514,7 @@ async function handleStroke(el: Element) {
     return;
   }
   let inserted = 0;
-  const geometries = geometriesFor(shape, pen, settings.lassoAfter);
+  const geometries = geometriesFor(shape, pen, settings.lassoAfter, settings);
   for (const g of geometries) {
     if (!ok<boolean>(await PluginCommAPI.insertGeometry(g as any))) {
       break;

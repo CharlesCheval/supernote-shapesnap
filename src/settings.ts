@@ -14,17 +14,27 @@ export type Settings = {
   /** Recognition tolerance, 1 (strict) to 5 (lenient). */
   tolerance: number;
   rect: boolean;
+  /** Rectangles tilted less than this are straightened to the page axes (0 = never). */
+  rectSnapDegrees: number;
   circle: boolean;
   /** Straight arrow: a shaft with a small head drawn at its end, in one stroke. */
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
   arrowSnapDegrees: number;
+  /** Arrow head size, percent of the size set by the pen width. */
+  arrowHeadPct: number;
   /** Curly brace, in any of the four directions. */
   brace: boolean;
   /** Square root sign, its bar as long as drawn. */
   sqrt: boolean;
   /** Coordinate axes, drawn as an "L". */
   axes: boolean;
+  /** Axes arrow head size, percent of the size set by the pen width. */
+  axesHeadPct: number;
+  /** Tick line width, percent of the axis line width. */
+  axesTickWidthPct: number;
+  /** Distance between ticks (mm). */
+  axesTickMm: number;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
   /**
@@ -46,12 +56,17 @@ export const DEFAULTS: Settings = {
   stillRadius: 12,
   tolerance: 3,
   rect: true,
+  rectSnapDegrees: 12,
   circle: true,
   arrow: true,
   arrowSnapDegrees: 8,
+  arrowHeadPct: 100,
   brace: true,
   sqrt: true,
   axes: true,
+  axesHeadPct: 100,
+  axesTickWidthPct: 50,
+  axesTickMm: 5,
   lassoAfter: true,
   replaceMode: 'number',
 };
@@ -61,6 +76,11 @@ export const LIMITS = {
   stillRadius: {min: 4, max: 40, step: 2},
   tolerance: {min: 1, max: 5, step: 1},
   arrowSnapDegrees: {min: 0, max: 20, step: 1},
+  rectSnapDegrees: {min: 0, max: 20, step: 1},
+  arrowHeadPct: {min: 30, max: 200, step: 10},
+  axesHeadPct: {min: 30, max: 200, step: 10},
+  axesTickWidthPct: {min: 20, max: 100, step: 10},
+  axesTickMm: {min: 2, max: 20, step: 1},
 };
 
 let current: Settings = {...DEFAULTS};
@@ -73,6 +93,10 @@ export function normalize(saved: Partial<Settings>): Settings {
   const s = {...DEFAULTS, ...saved};
   if (!REPLACE_MODES.includes(s.replaceMode)) {
     s.replaceMode = DEFAULTS.replaceMode;
+  }
+  for (const [k, {min, max}] of Object.entries(LIMITS) as [keyof typeof LIMITS, {min: number; max: number}][]) {
+    const v = s[k];
+    s[k] = typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : DEFAULTS[k];
   }
   return s;
 }
