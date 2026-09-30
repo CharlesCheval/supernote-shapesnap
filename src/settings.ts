@@ -31,6 +31,8 @@ export type Settings = {
   axes: boolean;
   /** Axes arrow head size, percent of the size set by the pen width. */
   axesHeadPct: number;
+  /** Draw ticks on the axes. */
+  axesTicks: boolean;
   /** Tick line width, percent of the axis line width. */
   axesTickWidthPct: number;
   /** Distance between ticks (mm). */
@@ -65,6 +67,7 @@ export const DEFAULTS: Settings = {
   sqrt: true,
   axes: true,
   axesHeadPct: 100,
+  axesTicks: true,
   axesTickWidthPct: 50,
   axesTickMm: 5,
   lassoAfter: true,

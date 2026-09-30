@@ -16,16 +16,16 @@ The plugin adds no toolbar button. Its settings live under **Settings → Apps �
 
 ## Settings
 
-One compact page. The **On / Off** switch in the header turns ShapeSnap off altogether. Then one row per shape: tap its icon to turn it on (black) or off (grey); the settings of that shape sit next to it.
+One page, no scrolling. The **On / Off** switch in the header turns ShapeSnap off altogether. Then **Symbols**, one row per shape: tap its icon to turn it on (black) or off (grey); the settings of that shape sit next to it.
 
 | Shape | Settings |
 |---|---|
 | Rectangle | **Straighten**: tilted less than this, it is set square to the page (0–20°, default 12°) |
 | Circle, brace, square root | — |
 | Arrow | **Head**: head size, % of the size set by the pen width (30–200 %, default 100 %) · **Straighten**: within this angle of horizontal / vertical, the shaft is straightened (0–20°, default 8°) |
-| Axes | **Head** (as for arrows) · **Tick width**: % of the axis line width (20–100 %, default 50 %) · **Tick every**: spacing in mm (2–20, default 5) |
+| Axes | **Head** (as for arrows) · **Ticks**: On or Off · **Tick width**: % of the axis line width (20–100 %, default 50 %) · **Tick every**: spacing in mm (2–20, default 5) |
 
-**General**: **Hold** (pause required at the end of the stroke, 0–1000 ms, default 0: snap as soon as the pen lifts), **Stillness** (jitter allowed during the hold, default 12 px), **Tolerance** (1 strict to 5 lenient), **Select after** (lasso the new shape, ready to resize), **Hand stroke** (Removed or Kept, see below). All settings are saved and survive restarts.
+**General**, in two framed blocks, each setting with one line of explanation. *Detection*: **Hold** (pause required at the end of the stroke, 0–1000 ms, default 0: snap as soon as the pen lifts), **Stillness** (jitter allowed during the hold, default 12 px), **Tolerance** (1 strict to 5 lenient). *After snapping*: **Select the shape** (lasso the new shape, ready to resize), **Hand-drawn stroke** (Removed or Kept, see below). All settings are saved and survive restarts.
 
 The **Last stroke** lines, in small print at the bottom, show three things:
 

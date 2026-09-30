@@ -169,7 +169,13 @@ const PX_PER_MM = 300 / 25.4;
 
 type Pen = {type: number; color: number; width: number};
 
-type Look = {arrowHeadPct: number; axesHeadPct: number; axesTickWidthPct: number; axesTickMm: number};
+type Look = {
+  arrowHeadPct: number;
+  axesHeadPct: number;
+  axesTicks: boolean;
+  axesTickWidthPct: number;
+  axesTickMm: number;
+};
 
 /** Geometries to insert for a shape (axes need four: each axis and its ticks). */
 function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): object[] {
@@ -211,7 +217,7 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
         // No lasso: it would only select one of the pieces.
         out.push(polyline(arrowPoints(shape.origin, end, axisHead, fill), false));
         const ticks = axisPoints(shape.origin, end, look.axesTickMm * PX_PER_MM, tick, axisHead).slice(0, -1);
-        if (ticks.length > 1) {
+        if (look.axesTicks && ticks.length > 1) {
           out.push(polyline(ticks, false, tickWidth));
         }
       }

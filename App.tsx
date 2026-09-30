@@ -11,7 +11,15 @@
 import React, {useEffect, useReducer} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
-import {DEFAULTS, LIMITS, REPLACE_MODES, Settings, getSettings, subscribe, updateSettings} from './src/settings';
+import {
+  DEFAULTS,
+  LIMITS,
+  REPLACE_MODES,
+  Settings,
+  getSettings,
+  subscribe,
+  updateSettings,
+} from './src/settings';
 import {lastMeasure, subscribeMeasures} from './src/snapper';
 
 type NumKey = keyof typeof LIMITS;
@@ -20,19 +28,26 @@ type NumKey = keyof typeof LIMITS;
 function Chip({label, k, unit}: {label: string; k: NumKey; unit: string}) {
   const value = getSettings()[k];
   const {min, max, step} = LIMITS[k];
-  const set = (v: number) => updateSettings({[k]: Math.min(max, Math.max(min, v))} as Partial<Settings>);
+  const set = (v: number) =>
+    updateSettings({[k]: Math.min(max, Math.max(min, v))} as Partial<Settings>);
   return (
     <View style={styles.chip}>
       <Text style={styles.chipLabel}>{label}</Text>
       <View style={styles.stepper}>
-        <Pressable style={styles.step} hitSlop={6} onPress={() => set(value - step)}>
+        <Pressable
+          style={styles.step}
+          hitSlop={6}
+          onPress={() => set(value - step)}>
           <Text style={styles.stepText}>−</Text>
         </Pressable>
         <Text style={styles.chipValue}>
           {value}
           {unit}
         </Text>
-        <Pressable style={styles.step} hitSlop={6} onPress={() => set(value + step)}>
+        <Pressable
+          style={styles.step}
+          hitSlop={6}
+          onPress={() => set(value + step)}>
           <Text style={styles.stepText}>+</Text>
         </Pressable>
       </View>
@@ -41,12 +56,26 @@ function Chip({label, k, unit}: {label: string; k: NumKey; unit: string}) {
 }
 
 /** A small labelled switch (On / Off) or cycling choice. */
-function Switch({label, value, on, onPress}: {label: string; value: string; on: boolean; onPress: () => void}) {
+function Switch({
+  label,
+  value,
+  on,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  on: boolean;
+  onPress: () => void;
+}) {
   return (
     <View style={styles.chip}>
       <Text style={styles.chipLabel}>{label}</Text>
-      <Pressable style={[styles.switch, on && styles.switchOn]} onPress={onPress}>
-        <Text style={[styles.switchText, on && styles.switchTextOn]}>{value}</Text>
+      <Pressable
+        style={[styles.switch, on && styles.switchOn]}
+        onPress={onPress}>
+        <Text style={[styles.switchText, on && styles.switchTextOn]}>
+          {value}
+        </Text>
       </Pressable>
     </View>
   );
@@ -66,13 +95,27 @@ function ShapeIcon({k, c}: {k: ShapeKey; c: string}) {
       return <View style={[styles.iconCircle, {borderColor: c}]} />;
     case 'axes':
       return <View style={[styles.iconAxes, {borderColor: c}]} />;
+    case 'arrow':
+      // Drawn, not a glyph: a font's arrow sits off-centre.
+      return (
+        <View style={styles.iconArrow}>
+          <View style={[styles.arrowShaft, {backgroundColor: c}]} />
+          <View style={[styles.arrowHead, {borderLeftColor: c}]} />
+        </View>
+      );
     default:
-      return <Text style={[styles.iconGlyph, {color: c}]}>{{arrow: '→', brace: '{', sqrt: '√'}[k]}</Text>;
+      return (
+        <Text style={[styles.iconGlyph, {color: c}]}>
+          {{brace: '{', sqrt: '√'}[k]}
+        </Text>
+      );
   }
 }
 
 /** The settings shown next to each shape. */
-const SHAPE_SETTINGS: {k: ShapeKey; chips: {label: string; k: NumKey; unit: string}[]}[] = [
+type ChipSpec = {label: string; k: NumKey; unit: string};
+
+const SHAPE_SETTINGS: {k: ShapeKey; chips: ChipSpec[]}[] = [
   {k: 'rect', chips: [{label: 'Straighten', k: 'rectSnapDegrees', unit: '°'}]},
   {k: 'circle', chips: []},
   {
@@ -94,18 +137,65 @@ const SHAPE_SETTINGS: {k: ShapeKey; chips: {label: string; k: NumKey; unit: stri
   },
 ];
 
-function ShapeRow({k, chips}: {k: ShapeKey; chips: {label: string; k: NumKey; unit: string}[]}) {
-  const on = getSettings()[k];
+function ShapeRow({k, chips}: {k: ShapeKey; chips: ChipSpec[]}) {
+  const s = getSettings();
+  const on = s[k];
+  // Axes: the tick settings only matter when ticks are drawn.
+  const tickChip = (c: ChipSpec) =>
+    c.k === 'axesTickWidthPct' || c.k === 'axesTickMm';
   return (
     <View style={styles.shapeRow}>
-      <Pressable style={[styles.shape, on && styles.shapeOn]} onPress={() => updateSettings({[k]: !on})}>
+      <Pressable
+        style={[styles.shape, on && styles.shapeOn]}
+        onPress={() => updateSettings({[k]: !on})}>
         <ShapeIcon k={k} c={on ? '#ffffff' : '#9d9d9d'} />
       </Pressable>
       <View style={[styles.chips, !on && styles.dim]}>
-        {chips.map(c => (
-          <Chip key={c.k} {...c} />
+        {chips
+          .filter(c => !tickChip(c))
+          .map(c => (
+            <Chip key={c.k} {...c} />
+          ))}
+        {k === 'axes' ? (
+          <Switch
+            label="Ticks"
+            value={s.axesTicks ? 'On' : 'Off'}
+            on={s.axesTicks}
+            onPress={() => updateSettings({axesTicks: !s.axesTicks})}
+          />
+        ) : null}
+        {chips.filter(tickChip).map(c => (
+          <View key={c.k} style={!s.axesTicks && styles.dim}>
+            <Chip {...c} />
+          </View>
         ))}
       </View>
+    </View>
+  );
+}
+
+/** A framed group of general settings, each with a line of explanation. */
+function Block({title, children}: {title: string; children: React.ReactNode}) {
+  return (
+    <View style={styles.block}>
+      <Text style={styles.blockTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+/** One general setting: its control, then what it does. */
+function Explained({
+  children,
+  text,
+}: {
+  children: React.ReactNode;
+  text: string;
+}) {
+  return (
+    <View style={styles.explained}>
+      {children}
+      <Text style={styles.explain}>{text}</Text>
     </View>
   );
 }
@@ -131,14 +221,20 @@ function App(): React.JSX.Element {
           <Pressable
             style={[styles.switch, s.enabled && styles.switchOn]}
             onPress={() => updateSettings({enabled: !s.enabled})}>
-            <Text style={[styles.switchText, s.enabled && styles.switchTextOn]}>{s.enabled ? 'On' : 'Off'}</Text>
+            <Text style={[styles.switchText, s.enabled && styles.switchTextOn]}>
+              {s.enabled ? 'On' : 'Off'}
+            </Text>
           </Pressable>
-          <Pressable onPress={() => PluginManager.closePluginView()} style={styles.close} hitSlop={16}>
+          <Pressable
+            onPress={() => PluginManager.closePluginView()}
+            style={styles.close}
+            hitSlop={16}>
             <Text style={styles.title}>✕</Text>
           </Pressable>
         </View>
       </View>
 
+      <Text style={styles.section}>Symbols</Text>
       <View style={[styles.card, !s.enabled && styles.dim]}>
         {SHAPE_SETTINGS.map(r => (
           <ShapeRow key={r.k} {...r} />
@@ -146,40 +242,61 @@ function App(): React.JSX.Element {
       </View>
 
       <Text style={styles.section}>General</Text>
-      <View style={[styles.chips, styles.general]}>
-        <Chip label="Hold" k="holdMs" unit=" ms" />
-        <Chip label="Stillness" k="stillRadius" unit=" px" />
-        <Chip label="Tolerance" k="tolerance" unit="/5" />
-        <Switch
-          label="Select after"
-          value={s.lassoAfter ? 'On' : 'Off'}
-          on={s.lassoAfter}
-          onPress={() => updateSettings({lassoAfter: !s.lassoAfter})}
-        />
-        <Switch
-          label="Hand stroke"
-          value={s.replaceMode === 'number' ? 'Removed' : 'Kept'}
-          on={false}
-          onPress={() => {
-            const i = REPLACE_MODES.indexOf(s.replaceMode);
-            updateSettings({replaceMode: REPLACE_MODES[(i + 1) % REPLACE_MODES.length]});
-          }}
-        />
+      <View style={styles.blocks}>
+        <Block title="Detection">
+          <Explained text="Pause at the end · 0 = snap on lift">
+            <Chip label="Hold" k="holdMs" unit=" ms" />
+          </Explained>
+          <Explained text="Jitter allowed during the pause">
+            <Chip label="Stillness" k="stillRadius" unit=" px" />
+          </Explained>
+          <Explained text="1 = neat drawing · 5 = lenient">
+            <Chip label="Tolerance" k="tolerance" unit=" / 5" />
+          </Explained>
+        </Block>
+        <Block title="After snapping">
+          <Explained text="Shape comes lasso-selected">
+            <Switch
+              label="Select the shape"
+              value={s.lassoAfter ? 'On' : 'Off'}
+              on={s.lassoAfter}
+              onPress={() => updateSettings({lassoAfter: !s.lassoAfter})}
+            />
+          </Explained>
+          <Explained
+            text={
+              s.replaceMode === 'number'
+                ? 'Deleted · clears the undo history'
+                : 'Left under · keeps the undo history'
+            }>
+            <Switch
+              label="Hand-drawn stroke"
+              value={s.replaceMode === 'number' ? 'Removed' : 'Kept'}
+              on={false}
+              onPress={() => {
+                const i = REPLACE_MODES.indexOf(s.replaceMode);
+                updateSettings({
+                  replaceMode: REPLACE_MODES[(i + 1) % REPLACE_MODES.length],
+                });
+              }}
+            />
+          </Explained>
+        </Block>
       </View>
-      <Text style={styles.hint}>
-        Hold: pause required at the end of the stroke (0 = snap as soon as the pen lifts) · Tolerance: 1 = neat drawing
-        required, 5 = lenient · Removed: the hand stroke is deleted, even over writing, but the undo history is cleared.
-      </Text>
 
       <View style={styles.footer}>
         <Text style={styles.section}>Last stroke</Text>
-        <Pressable style={styles.reset} onPress={() => updateSettings(DEFAULTS)}>
+        <Pressable
+          style={styles.reset}
+          onPress={() => updateSettings(DEFAULTS)}>
           <Text style={styles.resetText}>Reset to defaults</Text>
         </Pressable>
       </View>
       <Text style={styles.measure}>
         {m
-          ? `${m.result} · hold ${m.stillMs} ms${m.holdSource === 'points' ? ' (estimated)' : ''}`
+          ? `${m.result} · hold ${m.stillMs} ms${
+              m.holdSource === 'points' ? ' (estimated)' : ''
+            }`
           : 'No stroke analysed yet. Draw in a note, then come back here.'}
       </Text>
       {m?.details.map((d, i) => (
@@ -193,11 +310,23 @@ function App(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#ffffff'},
-  content: {paddingHorizontal: 28, paddingTop: 18, paddingBottom: 18},
-  header: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14},
+  content: {paddingHorizontal: 32, paddingTop: 22, paddingBottom: 24},
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   headerRight: {flexDirection: 'row', alignItems: 'center'},
-  title: {fontSize: 26, fontWeight: '700', color: '#000000'},
-  close: {paddingHorizontal: 6, marginLeft: 18},
+  title: {fontSize: 30, fontWeight: '700', color: '#000000'},
+  close: {paddingHorizontal: 6, marginLeft: 22},
+  section: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000000',
+    marginTop: 18,
+    marginBottom: 8,
+  },
   card: {borderTopWidth: 1, borderColor: '#c9c9c9'},
   shapeRow: {
     flexDirection: 'row',
@@ -205,59 +334,117 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderColor: '#c9c9c9',
-    minHeight: 76,
+    minHeight: 88,
   },
   shape: {
-    width: 60,
-    height: 60,
+    width: 72,
+    height: 72,
     borderWidth: 2,
     borderColor: '#9d9d9d',
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   shapeOn: {backgroundColor: '#000000', borderColor: '#000000'},
-  iconRect: {width: 34, height: 24, borderWidth: 3},
-  iconCircle: {width: 30, height: 30, borderRadius: 15, borderWidth: 3},
-  iconAxes: {width: 30, height: 30, borderLeftWidth: 3, borderBottomWidth: 3},
-  iconGlyph: {fontSize: 32, lineHeight: 38, fontWeight: '700'},
-  chips: {flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginLeft: 12},
-  chip: {marginRight: 22, marginVertical: 4},
-  chipLabel: {fontSize: 13, color: '#555555', marginBottom: 3},
+  iconRect: {width: 40, height: 28, borderWidth: 3},
+  iconCircle: {width: 36, height: 36, borderRadius: 18, borderWidth: 3},
+  iconAxes: {width: 34, height: 34, borderLeftWidth: 3, borderBottomWidth: 3},
+  iconArrow: {flexDirection: 'row', alignItems: 'center'},
+  arrowShaft: {width: 26, height: 4},
+  arrowHead: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 14,
+    borderTopWidth: 9,
+    borderBottomWidth: 9,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  iconGlyph: {
+    fontSize: 38,
+    lineHeight: 44,
+    fontWeight: '700',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+  chips: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginLeft: 18,
+  },
+  chip: {marginRight: 26, marginVertical: 4},
+  chipLabel: {fontSize: 17, color: '#444444', marginBottom: 4},
   stepper: {flexDirection: 'row', alignItems: 'center'},
   step: {
-    width: 34,
-    height: 32,
+    width: 40,
+    height: 38,
     borderWidth: 2,
     borderColor: '#000000',
-    borderRadius: 7,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepText: {fontSize: 20, lineHeight: 22, color: '#000000'},
-  chipValue: {minWidth: 64, fontSize: 17, color: '#000000', textAlign: 'center'},
+  stepText: {fontSize: 24, lineHeight: 26, color: '#000000'},
+  chipValue: {
+    minWidth: 76,
+    fontSize: 21,
+    color: '#000000',
+    textAlign: 'center',
+  },
   switch: {
-    minWidth: 84,
-    height: 32,
-    paddingHorizontal: 10,
+    minWidth: 100,
+    height: 38,
+    paddingHorizontal: 12,
     borderWidth: 2,
     borderColor: '#000000',
-    borderRadius: 7,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   switchOn: {backgroundColor: '#000000'},
-  switchText: {fontSize: 16, color: '#000000'},
+  switchText: {fontSize: 19, color: '#000000'},
   switchTextOn: {color: '#ffffff'},
   dim: {opacity: 0.4},
-  section: {fontSize: 17, fontWeight: '700', color: '#000000', marginTop: 16, marginBottom: 4},
-  general: {marginLeft: 0},
-  hint: {fontSize: 13, lineHeight: 19, color: '#555555', marginTop: 4},
-  footer: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end'},
-  reset: {paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: '#9d9d9d', borderRadius: 6},
-  resetText: {fontSize: 13, color: '#555555'},
-  measure: {fontSize: 15, color: '#000000', marginTop: 2},
-  detail: {fontSize: 12, lineHeight: 17, color: '#444444', marginTop: 3, fontFamily: 'monospace'},
+  blocks: {flexDirection: 'row', justifyContent: 'space-between'},
+  block: {
+    width: '48.5%',
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#000000',
+    borderRadius: 12,
+  },
+  blockTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 6,
+  },
+  explained: {marginTop: 6},
+  explain: {fontSize: 16, lineHeight: 22, color: '#444444', marginTop: 2},
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  reset: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: '#9d9d9d',
+    borderRadius: 8,
+  },
+  resetText: {fontSize: 16, color: '#444444'},
+  measure: {fontSize: 18, color: '#000000', marginTop: 2},
+  detail: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: '#444444',
+    marginTop: 4,
+    fontFamily: 'monospace',
+  },
 });
 
 export default App;
