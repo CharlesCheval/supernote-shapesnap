@@ -257,7 +257,9 @@ const CREATED: Record<Shape['kind'], string> = {
 async function measureHold(stroke: NonNullable<Element['stroke']>, size: number, page: number) {
   let stillMs = hold.takeRecent(Date.now());
   if (stillMs == null && hold.penSeen) {
-    await sleep(80); // the pen-up motion event may arrive just after the stroke event
+    // The pen-up motion event may arrive just after the stroke event. Whichever
+    // comes first: a short timer, or that event (timers can stall).
+    await Promise.race([sleep(80), hold.nextUp()]);
     stillMs = hold.takeRecent(Date.now());
   }
   if (stillMs != null) {
@@ -541,6 +543,9 @@ async function handleStroke(el: Element) {
 }
 
 let queue: Promise<void> = Promise.resolve();
+/** The stroke being handled: when it started, and its generation. */
+let busy: {since: number; gen: number} | null = null;
+let generation = 0;
 
 /** A stuck host call must never block the strokes that follow. */
 const STROKE_TIMEOUT_MS = 8000;
@@ -570,12 +575,31 @@ function onPenUp(msg: unknown) {
   }
   const strokes = elements.filter(e => e?.type === Element.TYPE_STROKE && e.stroke);
   const last = strokes[strokes.length - 1];
+  // Watchdog without timers: once the plugin view has been shown (settings),
+  // the host may stall the plugin's timers, so a stuck host call could block
+  // every following stroke for good, its timeout never firing. A stroke still
+  // busy after the time limit is abandoned when the next one arrives.
+  if (busy && Date.now() - busy.since > STROKE_TIMEOUT_MS) {
+    const secs = Math.round((Date.now() - busy.since) / 1000);
+    report({stillMs: 0, holdSource: 'clock', result: `previous stroke stuck ${secs} s: skipped`, details: []});
+    busy = null;
+    queue = Promise.resolve();
+  }
+  const gen = ++generation;
   queue = queue
-    .then(() => (last ? withTimeout(handleStroke(last), STROKE_TIMEOUT_MS) : undefined))
+    .then(() => {
+      busy = {since: Date.now(), gen};
+      return last ? withTimeout(handleStroke(last), STROKE_TIMEOUT_MS) : undefined;
+    })
     .catch((e: any) =>
       report({stillMs: 0, holdSource: 'clock', result: `error: ${e?.message ?? e}`, details: []}),
     )
-    .finally(release);
+    .finally(() => {
+      if (busy?.gen === gen) {
+        busy = null;
+      }
+      release();
+    });
 }
 
 export function start() {

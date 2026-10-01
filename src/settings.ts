@@ -109,32 +109,86 @@ export function subscribe(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-async function settingsDir(): Promise<string | null> {
-  const dir = await PluginManager.getPluginDirPath();
-  return dir ? `${dir}/settings` : null;
+/**
+ * Storage: one folder per setting, named `key=value` (value as encoded JSON),
+ * plus a `~complete` marker. The whole settings as ONE folder name (the former
+ * format) grew past the 255-character limit of a file name once the per-shape
+ * settings were added: every save then deleted the old folder and failed to
+ * create the new one. Names here stay short whatever the number of settings.
+ */
+const COMPLETE = '~complete';
+
+export function encodeEntries(s: Settings): string[] {
+  return [
+    ...Object.entries(s).map(([k, v]) => `${k}=${encodeURIComponent(JSON.stringify(v))}`),
+    COMPLETE,
+  ];
+}
+
+/** Settings read back from folder names; null when the set is incomplete or unreadable. */
+export function decodeEntries(names: string[]): Partial<Settings> | null {
+  if (names.includes(COMPLETE)) {
+    const out: Record<string, unknown> = {};
+    for (const name of names) {
+      const at = name.indexOf('=');
+      if (at > 0) {
+        try {
+          out[name.slice(0, at)] = JSON.parse(decodeURIComponent(name.slice(at + 1)));
+        } catch {
+          // unreadable value: its default is used
+        }
+      }
+    }
+    return out as Partial<Settings>;
+  }
+  // Former format: the whole JSON as one folder name.
+  for (const name of names) {
+    try {
+      const saved = JSON.parse(decodeURIComponent(name));
+      if (saved && typeof saved === 'object') {
+        return saved;
+      }
+    } catch {
+      // not a settings entry
+    }
+  }
+  return null;
+}
+
+async function baseDir(): Promise<string | null> {
+  return (await PluginManager.getPluginDirPath()) ?? null;
+}
+
+async function entryNames(dir: string): Promise<string[]> {
+  if (!(await FileUtils.exists(dir))) {
+    return [];
+  }
+  // Typed as strings, but the native module returns {path, type} objects.
+  const entries: unknown[] = (await FileUtils.listFiles(dir)) ?? [];
+  const names: string[] = [];
+  for (const entry of entries) {
+    const path = typeof entry === 'string' ? entry : (entry as {path?: string} | null)?.path;
+    if (typeof path === 'string') {
+      const name = path.replace(/\/+$/, '');
+      names.push(name.slice(name.lastIndexOf('/') + 1));
+    }
+  }
+  return names;
 }
 
 export async function loadSettings() {
   try {
-    const dir = await settingsDir();
-    if (!dir || !(await FileUtils.exists(dir))) {
+    const base = await baseDir();
+    if (!base) {
       return;
     }
-    // Typed as strings, but the native module returns {path, type} objects.
-    const entries: unknown[] = (await FileUtils.listFiles(dir)) ?? [];
-    for (const entry of entries) {
-      const path = typeof entry === 'string' ? entry : (entry as {path?: string} | null)?.path;
-      if (typeof path !== 'string') {
-        continue;
-      }
-      const name = path.replace(/\/+$/, '');
-      try {
-        const saved = JSON.parse(decodeURIComponent(name.slice(name.lastIndexOf('/') + 1)));
+    // `settings.new` is a save that was not renamed into place (interrupted).
+    for (const dir of [`${base}/settings`, `${base}/settings.new`]) {
+      const saved = decodeEntries(await entryNames(dir));
+      if (saved) {
         current = normalize(saved);
         listeners.forEach(fn => fn());
         return;
-      } catch {
-        // unreadable entry: try the next one
       }
     }
   } catch (e) {
@@ -153,13 +207,24 @@ export function updateSettings(patch: Partial<Settings>) {
       if (snapshot !== current) {
         return; // a newer value will be written
       }
-      const dir = await settingsDir();
-      if (!dir) {
+      const base = await baseDir();
+      if (!base) {
         return;
       }
-      await FileUtils.deleteDir(dir);
-      await FileUtils.makeDir(dir);
-      await FileUtils.makeDir(`${dir}/${encodeURIComponent(JSON.stringify(snapshot))}`);
+      // Written aside first: the saved settings are replaced only by a complete set.
+      const next = `${base}/settings.new`;
+      await FileUtils.deleteDir(next);
+      if (!(await FileUtils.makeDir(next))) {
+        return;
+      }
+      for (const name of encodeEntries(snapshot)) {
+        if (!(await FileUtils.makeDir(`${next}/${name}`))) {
+          console.warn('[ShapeSnap] saveSettings: could not write', name);
+          return;
+        }
+      }
+      await FileUtils.deleteDir(`${base}/settings`);
+      await FileUtils.renameToFile(next, `${base}/settings`);
     })
     .catch(e => console.warn('[ShapeSnap] saveSettings', e));
 }

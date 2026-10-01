@@ -26,7 +26,14 @@ export class HoldTracker {
   /** Last pen lift: final still duration and time received. */
   lastUp: {stillMs: number; receivedAt: number} | null = null;
 
+  private upWaiters: (() => void)[] = [];
+
   constructor(private readonly radius: () => number) {}
+
+  /** Resolves at the next pen lift (no timer: timers can stall once the plugin view was shown). */
+  nextUp(): Promise<void> {
+    return new Promise(resolve => this.upWaiters.push(resolve));
+  }
 
   feed(e: PenMotion, now: number) {
     if (e.toolType !== TOOL_PEN) {
@@ -44,6 +51,9 @@ export class HoldTracker {
     }
     if (e.action === ACTION_UP) {
       this.lastUp = {stillMs: e.eventTime - this.anchorTime, receivedAt: now};
+      const waiters = this.upWaiters;
+      this.upWaiters = [];
+      waiters.forEach(fn => fn());
     }
   }
 
