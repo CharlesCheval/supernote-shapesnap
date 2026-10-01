@@ -115,8 +115,18 @@ describe('axes', () => {
   });
   test('drawn the other way (right → corner → top)', () =>
     expect(kind(hand(polyline([{x: 900, y: 700}, {x: 200, y: 700}, {x: 200, y: 100}]), 3))).toBe('axes'));
-  test('slanted legs are not axes', () =>
-    expect(kind(polyline([{x: 200, y: 100}, {x: 300, y: 700}, {x: 900, y: 600}]))).toBeNull());
+  test('tilted axes (any angle) stay tilted and perpendicular', () => {
+    const res = recognize(polyline([{x: 200, y: 100}, {x: 400, y: 700}, {x: 1000, y: 500}]), opts);
+    expect(res.shape?.kind).toBe('axes');
+    if (res.shape?.kind === 'axes') {
+      const {origin: o, xEnd: a, yEnd: b} = res.shape;
+      const dot = (a.x - o.x) * (b.x - o.x) + (a.y - o.y) * (b.y - o.y);
+      expect(Math.abs(dot) / (Math.hypot(a.x - o.x, a.y - o.y) * Math.hypot(b.x - o.x, b.y - o.y))).toBeLessThan(1e-9);
+      expect(Math.abs(a.y - o.y)).toBeGreaterThan(100); // not straightened: tilted about 18°
+    }
+  });
+  test('legs far from perpendicular are not axes', () =>
+    expect(kind(polyline([{x: 200, y: 100}, {x: 300, y: 700}, {x: 900, y: 300}]))).toBeNull());
   test('small "L" (handwriting) is not axes', () =>
     expect(kind(polyline([{x: 100, y: 100}, {x: 100, y: 180}, {x: 150, y: 180}]))).toBeNull());
 });

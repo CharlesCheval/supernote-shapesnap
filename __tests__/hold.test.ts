@@ -26,3 +26,16 @@ test('no pause, stale measurement, finger ignored', () => {
   f.feed({...pen(1, 0, 0, 0), toolType: 1}, 0);
   expect(f.penSeen).toBe(false);
 });
+
+test('pen state: down and up, with a count of strokes started', async () => {
+  const h = new HoldTracker(() => 12);
+  const ev = (action: number, t: number) => ({action, x: 0, y: 0, eventTime: t, downTime: 1000, toolType: 2});
+  expect(h.penDown).toBe(false);
+  h.feed(ev(0, 1000), 1000);
+  expect(h.penDown).toBe(true);
+  expect(h.downs).toBe(1);
+  const lifted = h.nextUp();
+  h.feed(ev(1, 1200), 1200);
+  await lifted;
+  expect(h.penDown).toBe(false);
+});

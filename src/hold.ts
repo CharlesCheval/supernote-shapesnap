@@ -23,6 +23,10 @@ export class HoldTracker {
   private anchorTime = 0;
   /** True once a pen event has been received: the host does forward pen events. */
   penSeen = false;
+  /** A pen stroke is in progress (pen on the screen). */
+  penDown = false;
+  /** Pen-downs seen so far: tells whether a new stroke started since. */
+  downs = 0;
   /** Last pen lift: final still duration and time received. */
   lastUp: {stillMs: number; receivedAt: number} | null = null;
 
@@ -40,6 +44,10 @@ export class HoldTracker {
       return;
     }
     this.penSeen = true;
+    if (e.action === ACTION_DOWN) {
+      this.penDown = true;
+      this.downs++;
+    }
     if (e.downTime !== this.downTime || e.action === ACTION_DOWN) {
       this.downTime = e.downTime;
       this.anchor = {x: e.x, y: e.y};
@@ -50,6 +58,7 @@ export class HoldTracker {
       this.anchorTime = e.eventTime;
     }
     if (e.action === ACTION_UP) {
+      this.penDown = false;
       this.lastUp = {stillMs: e.eventTime - this.anchorTime, receivedAt: now};
       const waiters = this.upWaiters;
       this.upWaiters = [];

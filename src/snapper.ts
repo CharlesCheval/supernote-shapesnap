@@ -454,6 +454,8 @@ async function handleStroke(el: Element) {
     return;
   }
   const place = await currentPlace();
+  // Pen-downs so far: a higher count later means the user already writes again.
+  const downsAtStart = hold.downs;
   const size = await stroke.points.size();
   if (size < 8) {
     return;
@@ -510,6 +512,12 @@ async function handleStroke(el: Element) {
     report({stillMs, holdSource, result: 'cancelled: file or page changed', details});
     return;
   }
+  // Never change the page while the pen is writing the next stroke: the host
+  // dropped that stroke (measured with a 150 ms hold). Wait for the pen to lift.
+  if (hold.penDown) {
+    details.push('waited for the next stroke to end');
+    await hold.nextUp();
+  }
   // Remove the stroke first (per setting), then insert the shape; restore the stroke if insertion fails.
   const deletion = await removeStroke(el);
   details.push(`removal: ${deletion.how}`);
@@ -522,7 +530,13 @@ async function handleStroke(el: Element) {
     return;
   }
   let inserted = 0;
-  const geometries = geometriesFor(shape, pen, settings.lassoAfter, settings);
+  // No lasso on the shape if the user already writes again: the selection
+  // would take the next stroke as a lasso gesture.
+  const lassoAfter = settings.lassoAfter && hold.downs === downsAtStart && !hold.penDown;
+  if (settings.lassoAfter && !lassoAfter) {
+    details.push('not selected: writing resumed');
+  }
+  const geometries = geometriesFor(shape, pen, lassoAfter, settings);
   for (const g of geometries) {
     if (!ok<boolean>(await PluginCommAPI.insertGeometry(g as any))) {
       break;

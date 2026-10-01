@@ -254,22 +254,38 @@ export function recognizeAxes(path: P[], minSize: number, k: number): Result {
   ) {
     return {shape: null, reason: 'axes: legs not straight'};
   }
-  const angleOf = (p: P) => deg(Math.atan2(p.y - o.y, p.x - o.x));
-  const offAxis = (a: number) => Math.abs(a - Math.round(a / 90) * 90);
-  const [a0, a1] = [angleOf(s), angleOf(e)];
-  if (offAxis(a0) > 7 * k || offAxis(a1) > 7 * k) {
-    return {shape: null, reason: 'axes: legs not horizontal / vertical'};
+  // Any orientation: the legs must be perpendicular; the pair is then turned as
+  // one orthogonal frame, snapped to the page axes when it is nearly upright.
+  const t0 = Math.atan2(s.y - o.y, s.x - o.x);
+  const t1 = Math.atan2(e.y - o.y, e.x - o.x);
+  let diff = t1 - t0;
+  while (diff > Math.PI) {
+    diff -= 2 * Math.PI;
   }
-  const vertical0 = Math.abs(Math.round(a0 / 90)) % 2 === 1;
-  const vertical1 = Math.abs(Math.round(a1 / 90)) % 2 === 1;
-  if (vertical0 === vertical1) {
-    return {shape: null, reason: 'axes: legs not perpendicular'};
+  while (diff <= -Math.PI) {
+    diff += 2 * Math.PI;
   }
-  const [vEnd, hEnd] = vertical0 ? [s, e] : [e, s];
-  return {
-    shape: {kind: 'axes', origin: o, xEnd: {x: hEnd.x, y: o.y}, yEnd: {x: o.x, y: vEnd.y}},
-    reason: 'axes',
+  if (Math.abs(Math.abs(deg(diff)) - 90) > 12 * k) {
+    return {shape: null, reason: `axes: legs not perpendicular (${Math.round(Math.abs(deg(diff)))}°)`};
+  }
+  const turn = diff > 0 ? Math.PI / 2 : -Math.PI / 2;
+  let frame = t0 + (diff - turn) / 2; // leg 0 direction, leg 1 at frame + turn
+  const tilt = deg(frame) - Math.round(deg(frame) / 90) * 90;
+  if (Math.abs(tilt) <= 7 * k) {
+    frame -= (tilt * Math.PI) / 180;
+  }
+  const along = (a: number, len: number) => {
+    // Exact zeros on the page axes, so that upright axes are exactly upright.
+    const cs = Math.abs(Math.cos(a)) < 1e-9 ? 0 : Math.cos(a);
+    const sn = Math.abs(Math.sin(a)) < 1e-9 ? 0 : Math.sin(a);
+    return {x: o.x + len * cs, y: o.y + len * sn};
   };
+  const end0 = along(frame, legs[0].len);
+  const end1 = along(frame + turn, legs[1].len);
+  // x axis: the leg closer to horizontal.
+  const flat = (p: P) => Math.abs(p.x - o.x) >= Math.abs(p.y - o.y);
+  const [xEnd, yEnd] = flat(end0) && !flat(end1) ? [end0, end1] : flat(end1) ? [end1, end0] : [end0, end1];
+  return {shape: {kind: 'axes', origin: o, xEnd, yEnd}, reason: 'axes'};
 }
 
 /**
