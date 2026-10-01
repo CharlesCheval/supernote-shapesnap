@@ -373,9 +373,17 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   const gap = dist(path[end], path[0]) / big;
   const loop = resample([...path.slice(0, end + 1), path[0]], 65).slice(0, 64);
 
-  const corners = countCorners(loop);
   const circle = fitCircle(loop);
   const rect = fitRect(loop, opts.rectSnapDegrees ?? SNAP_DEGREES);
+  // Corners are counted on a loop fine enough for the short side: with a fixed
+  // 64 points, the two corners of a long thin rectangle's short side merged
+  // into one, and the rectangle was missed.
+  const shortSide = Math.max(1, Math.min(rect.w, rect.h));
+  const perimeter = 2 * (rect.w + rect.h);
+  const fine = Math.min(512, Math.max(64, Math.ceil(perimeter / (shortSide / 8))));
+  const corners = countCorners(
+    fine === 64 ? loop : resample([...path.slice(0, end + 1), path[0]], fine + 1).slice(0, fine),
+  );
   const metrics: Metrics = {width, height, gap, corners, rectErr: rect.err, circErr: circle.err, angle: rect.angle};
 
   // Open shapes, tried in turn; the reasons of the misses are kept for the diagnostics.

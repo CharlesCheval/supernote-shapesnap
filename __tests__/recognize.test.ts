@@ -236,3 +236,24 @@ test('arrow snapping angle is configurable', () => {
   expect(snapDirection(tail, at(85), 8).x).toBe(0);
   expect(snapDirection(tail, at(3), 0)).toEqual(at(3));
 });
+
+test('long thin rectangle drawn slowly (many points, wobbly) is still a rectangle', () => {
+  let s = 7;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647 - 0.5) * 16;
+  const [w, h] = [1500, 120];
+  const c = [{x: 100, y: 100}, {x: 100 + w, y: 100}, {x: 100 + w, y: 100 + h}, {x: 100, y: 100 + h}, {x: 100, y: 100}];
+  const sides = [w, h, w, h];
+  const pts = Array.from({length: 3001}, (_, i) => {
+    let d = (i / 3000) * 2 * (w + h);
+    let k = 0;
+    while (d > sides[k]) {
+      d -= sides[k];
+      k++;
+    }
+    const t = d / sides[k];
+    return {x: c[k].x + t * (c[k + 1].x - c[k].x) + rnd(), y: c[k].y + t * (c[k + 1].y - c[k].y) + rnd()};
+  });
+  const r = recognize(pts, opts);
+  expect(r.shape?.kind).toBe('rect');
+  expect(r.metrics?.corners).toBe(4);
+});
