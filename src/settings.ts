@@ -39,7 +39,7 @@ export type Settings = {
   axesTickMm: number;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
-  /** Also snap tiny shapes (down to 2 mm), only after a pause at the end. */
+  /** Also snap tiny shapes (down to 1 mm), only after a pause at the end. */
   tinyShapes: boolean;
   /**
    * What happens to the hand-drawn stroke once the shape is inserted:

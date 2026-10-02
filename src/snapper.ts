@@ -20,10 +20,10 @@ const ASSUMED_POINTS_PER_SECOND = 100;
 const TAIL_POINTS = 200;
 const MIN_SHAPE_SIZE = 60;
 /**
- * Tiny shapes (setting): down to about 2 mm, but only after a pause at the end
+ * Tiny shapes (setting): down to about 1 mm, but only after a pause at the end
  * of the stroke, so that letters such as "o" or "0" written at speed stay ink.
  */
-const TINY_SHAPE_SIZE = 24;
+const TINY_SHAPE_SIZE = 10;
 const TINY_HOLD_MS = 300;
 
 const hold = new HoldTracker(() => getSettings().stillRadius);

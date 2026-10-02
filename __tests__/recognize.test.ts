@@ -271,3 +271,11 @@ test('tiny shapes (about 3 mm) are recognised with the tiny minimum size', () =>
   const box = [...side(c[0], c[1]), ...side(c[1], c[2]), ...side(c[2], c[3]), ...side(c[3], c[0]), c[0]];
   expect(recognize(box, tiny).shape?.kind).toBe('rect');
 });
+
+test('really tiny circle (about 1 mm, few points) with the tiny minimum size', () => {
+  const circle = Array.from({length: 18}, (_, i) => ({
+    x: 50 + 6 * Math.cos((2 * Math.PI * i) / 17),
+    y: 50 + 6 * Math.sin((2 * Math.PI * i) / 17),
+  }));
+  expect(recognize(circle, {...opts, minSize: 10}).shape?.kind).toBe('circle');
+});

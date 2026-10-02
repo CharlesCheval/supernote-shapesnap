@@ -253,7 +253,7 @@ function App(): React.JSX.Element {
           <Explained text="1 = neat drawing · 5 = lenient">
             <Chip label="Tolerance" k="tolerance" unit=" / 5" />
           </Explained>
-          <Explained text="Down to 2 mm · hold the pen at the end">
+          <Explained text="Down to 1 mm · hold the pen at the end">
             <Switch
               label="Tiny shapes"
               value={s.tinyShapes ? 'On' : 'Off'}
