@@ -1,9 +1,9 @@
 /**
- * Settings screen, opened from Settings → Apps → Plugins → ShapeSnap.
+ * Settings screen, opened from the plugin menu or Settings → Apps → Plugins.
  * Compact: one row per shape — its icon (tap to turn it on or off) and, next to
- * it, the settings of that shape — then the general settings and the last
- * stroke's diagnostics. − / + buttons rather than sliders: more precise with a
- * pen on e-ink. Everything fits on one page.
+ * it, its settings, Straighten first — then the three detection settings on one
+ * row and, on one line, what happened to the last stroke. − / + buttons rather
+ * than sliders: more precise with a pen on e-ink.
  *
  * @format
  */
@@ -14,7 +14,6 @@ import {PluginManager} from 'sn-plugin-lib';
 import {
   DEFAULTS,
   LIMITS,
-  REPLACE_MODES,
   Settings,
   getSettings,
   subscribe,
@@ -94,7 +93,14 @@ function ShapeIcon({k, c}: {k: ShapeKey; c: string}) {
     case 'circle':
       return <View style={[styles.iconCircle, {borderColor: c}]} />;
     case 'axes':
-      return <View style={[styles.iconAxes, {borderColor: c}]} />;
+      // An "L" with an arrow head at the end of each axis.
+      return (
+        <View style={styles.iconAxesBox}>
+          <View style={[styles.axesUp, {borderBottomColor: c}]} />
+          <View style={[styles.iconAxes, {borderColor: c}]} />
+          <View style={[styles.axesRight, {borderLeftColor: c}]} />
+        </View>
+      );
     case 'arrow':
       // Drawn, not a glyph: a font's arrow sits off-centre.
       return (
@@ -116,25 +122,26 @@ function ShapeIcon({k, c}: {k: ShapeKey; c: string}) {
 type ChipSpec = {label: string; k: NumKey; unit: string};
 
 const SHAPE_SETTINGS: {k: ShapeKey; chips: ChipSpec[]}[] = [
-  {k: 'rect', chips: [{label: 'Straighten', k: 'rectSnapDegrees', unit: '°'}]},
   {k: 'circle', chips: []},
+  {k: 'rect', chips: [{label: 'Straighten', k: 'rectSnapDegrees', unit: '°'}]},
   {
     k: 'arrow',
     chips: [
-      {label: 'Head', k: 'arrowHeadPct', unit: '%'},
       {label: 'Straighten', k: 'arrowSnapDegrees', unit: '°'},
+      {label: 'Head', k: 'arrowHeadPct', unit: '%'},
     ],
   },
-  {k: 'brace', chips: []},
-  {k: 'sqrt', chips: []},
   {
     k: 'axes',
     chips: [
+      {label: 'Straighten', k: 'axesSnapDegrees', unit: '°'},
       {label: 'Head', k: 'axesHeadPct', unit: '%'},
       {label: 'Tick width', k: 'axesTickWidthPct', unit: '%'},
       {label: 'Tick every', k: 'axesTickMm', unit: ' mm'},
     ],
   },
+  {k: 'brace', chips: []},
+  {k: 'sqrt', chips: []},
 ];
 
 function ShapeRow({k, chips}: {k: ShapeKey; chips: ChipSpec[]}) {
@@ -170,32 +177,6 @@ function ShapeRow({k, chips}: {k: ShapeKey; chips: ChipSpec[]}) {
           </View>
         ))}
       </View>
-    </View>
-  );
-}
-
-/** A framed group of general settings, each with a line of explanation. */
-function Block({title, children}: {title: string; children: React.ReactNode}) {
-  return (
-    <View style={styles.block}>
-      <Text style={styles.blockTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-/** One general setting: its control, then what it does. */
-function Explained({
-  children,
-  text,
-}: {
-  children: React.ReactNode;
-  text: string;
-}) {
-  return (
-    <View style={styles.explained}>
-      {children}
-      <Text style={styles.explain}>{text}</Text>
     </View>
   );
 }
@@ -241,77 +222,28 @@ function App(): React.JSX.Element {
         ))}
       </View>
 
-      <Text style={styles.section}>General</Text>
-      <View style={styles.blocks}>
-        <Block title="Detection">
-          <Explained text="Pause at the end · 0 = snap on lift">
-            <Chip label="Hold" k="holdMs" unit=" ms" />
-          </Explained>
-          <Explained text="Jitter allowed during the pause">
-            <Chip label="Stillness" k="stillRadius" unit=" px" />
-          </Explained>
-          <Explained text="1 = neat drawing · 5 = lenient">
-            <Chip label="Tolerance" k="tolerance" unit=" / 5" />
-          </Explained>
-          <Explained text="Down to 1 mm · hold the pen at the end">
-            <Switch
-              label="Tiny shapes"
-              value={s.tinyShapes ? 'On' : 'Off'}
-              on={s.tinyShapes}
-              onPress={() => updateSettings({tinyShapes: !s.tinyShapes})}
-            />
-          </Explained>
-        </Block>
-        <Block title="After snapping">
-          <Explained text="Shape comes lasso-selected">
-            <Switch
-              label="Select the shape"
-              value={s.lassoAfter ? 'On' : 'Off'}
-              on={s.lassoAfter}
-              onPress={() => updateSettings({lassoAfter: !s.lassoAfter})}
-            />
-          </Explained>
-          <Explained
-            text={
-              s.replaceMode === 'number'
-                ? 'Deleted · clears the undo history'
-                : 'Left under · keeps the undo history'
-            }>
-            <Switch
-              label="Hand-drawn stroke"
-              value={s.replaceMode === 'number' ? 'Removed' : 'Kept'}
-              on={false}
-              onPress={() => {
-                const i = REPLACE_MODES.indexOf(s.replaceMode);
-                updateSettings({
-                  replaceMode: REPLACE_MODES[(i + 1) % REPLACE_MODES.length],
-                });
-              }}
-            />
-          </Explained>
-        </Block>
+      <Text style={styles.section}>Detection</Text>
+      <View style={[styles.detection, !s.enabled && styles.dim]}>
+        <Chip label="Hold" k="holdMs" unit=" ms" />
+        <Chip label="Stillness" k="stillRadius" unit=" px" />
+        <Chip label="Tolerance" k="tolerance" unit=" / 5" />
       </View>
+      <Text style={styles.explain}>
+        Hold: pause at the end of the stroke (0 = on lift) · Stillness: jitter
+        allowed during it · Tolerance: 1 neat, 5 lenient. Shapes under 5 mm
+        always need the pause.
+      </Text>
 
       <View style={styles.footer}>
-        <Text style={styles.section}>Last stroke</Text>
+        <Text style={styles.measure} numberOfLines={1}>
+          {m ? `Last stroke: ${m.result}` : 'Last stroke: none yet'}
+        </Text>
         <Pressable
           style={styles.reset}
           onPress={() => updateSettings(DEFAULTS)}>
           <Text style={styles.resetText}>Reset to defaults</Text>
         </Pressable>
       </View>
-      <Text style={styles.measure}>
-        {m
-          ? `${m.result} · hold ${m.stillMs} ms${
-              m.holdSource === 'points' ? ' (estimated)' : ''
-            }`
-          : 'No stroke analysed yet. Draw in a note, then come back here.'}
-      </Text>
-      {m?.details.map((d, i) => (
-        <Text key={i} style={styles.detail} numberOfLines={2}>
-          {d}
-        </Text>
-      ))}
     </ScrollView>
   );
 }
@@ -332,21 +264,21 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#000000',
-    marginTop: 18,
-    marginBottom: 8,
+    marginTop: 12,
+    marginBottom: 4,
   },
   card: {borderTopWidth: 1, borderColor: '#c9c9c9'},
   shapeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 5,
     borderBottomWidth: 1,
     borderColor: '#c9c9c9',
-    minHeight: 88,
+    minHeight: 72,
   },
   shape: {
-    width: 72,
-    height: 72,
+    width: 62,
+    height: 62,
     borderWidth: 2,
     borderColor: '#9d9d9d',
     borderRadius: 12,
@@ -356,7 +288,40 @@ const styles = StyleSheet.create({
   shapeOn: {backgroundColor: '#000000', borderColor: '#000000'},
   iconRect: {width: 40, height: 28, borderWidth: 3},
   iconCircle: {width: 36, height: 36, borderRadius: 18, borderWidth: 3},
-  iconAxes: {width: 34, height: 34, borderLeftWidth: 3, borderBottomWidth: 3},
+  iconAxesBox: {width: 40, height: 40},
+  iconAxes: {
+    position: 'absolute',
+    left: 4,
+    top: 6,
+    width: 30,
+    height: 30,
+    borderLeftWidth: 3,
+    borderBottomWidth: 3,
+  },
+  axesUp: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5.5,
+    borderRightWidth: 5.5,
+    borderBottomWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  axesRight: {
+    position: 'absolute',
+    left: 31,
+    top: 28.5,
+    width: 0,
+    height: 0,
+    borderTopWidth: 5.5,
+    borderBottomWidth: 5.5,
+    borderLeftWidth: 9,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
   iconArrow: {flexDirection: 'row', alignItems: 'center'},
   arrowShaft: {width: 26, height: 4},
   arrowHead: {
@@ -383,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 18,
   },
-  chip: {marginRight: 26, marginVertical: 4},
+  chip: {marginRight: 22, marginVertical: 2},
   chipLabel: {fontSize: 17, color: '#444444', marginBottom: 4},
   stepper: {flexDirection: 'row', alignItems: 'center'},
   step: {
@@ -416,26 +381,13 @@ const styles = StyleSheet.create({
   switchText: {fontSize: 19, color: '#000000'},
   switchTextOn: {color: '#ffffff'},
   dim: {opacity: 0.4},
-  blocks: {flexDirection: 'row', justifyContent: 'space-between'},
-  block: {
-    width: '48.5%',
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#000000',
-    borderRadius: 12,
-  },
-  blockTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 6,
-  },
-  explained: {marginTop: 6},
-  explain: {fontSize: 16, lineHeight: 22, color: '#444444', marginTop: 2},
+  detection: {flexDirection: 'row', flexWrap: 'wrap'},
+  explain: {fontSize: 16, lineHeight: 22, color: '#444444', marginTop: 4},
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    marginTop: 14,
   },
   reset: {
     paddingVertical: 6,
@@ -445,14 +397,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   resetText: {fontSize: 16, color: '#444444'},
-  measure: {fontSize: 18, color: '#000000', marginTop: 2},
-  detail: {
-    fontSize: 15,
-    lineHeight: 21,
-    color: '#444444',
-    marginTop: 4,
-    fontFamily: 'monospace',
-  },
+  measure: {flex: 1, fontSize: 18, color: '#000000', marginRight: 16},
 });
 
 export default App;

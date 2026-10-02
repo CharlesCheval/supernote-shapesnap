@@ -19,8 +19,15 @@ import {getSettings} from './settings';
 const ASSUMED_POINTS_PER_SECOND = 100;
 const TAIL_POINTS = 200;
 const MIN_SHAPE_SIZE = 60;
+/** Head size: 100 % of the setting is 70 % of the former size (asked for). */
+const HEAD_SCALE = 0.7;
 /**
- * Tiny shapes (setting): down to about 1 mm, but only after a pause at the end
+ * The hand-drawn stroke is always removed, and the shape always comes
+ * lasso-selected (unless writing has resumed): no settings for these any more.
+ */
+const KEEP_STROKE = false;
+/**
+ * Tiny shapes: down to about 1 mm, but only after a pause at the end
  * of the stroke, so that letters such as "o" or "0" written at speed stay ink.
  */
 const TINY_SHAPE_SIZE = 10;
@@ -207,7 +214,7 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
   switch (shape.kind) {
     case 'arrow':
       // One polyline: shaft, triangular head, then rungs that fill the head.
-      return [polyline(arrowPoints(shape.tail, shape.tip, (head * look.arrowHeadPct) / 100, fill), lasso)];
+      return [polyline(arrowPoints(shape.tail, shape.tip, (head * HEAD_SCALE * look.arrowHeadPct) / 100, fill), lasso)];
     case 'brace':
     case 'sqrt':
       return [polyline(shape.points, lasso)];
@@ -215,7 +222,7 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
       // Each axis: the line with its filled head, then its ticks as a separate,
       // thinner polyline (drawn out and back across the axis, travelling along it
       // underneath, where the thicker axis hides it).
-      const axisHead = (head * look.axesHeadPct) / 100;
+      const axisHead = (head * HEAD_SCALE * look.axesHeadPct) / 100;
       const tick = Math.max(8, (2 * base.penWidth) / 100);
       const tickWidth = (base.penWidth * look.axesTickWidthPct) / 100;
       const out: object[] = [];
@@ -421,7 +428,7 @@ async function deleteByNumber(el: Element): Promise<{ok: boolean; how: string}> 
  * `removed: false` with `ok: true` means the stroke stays under the shape (keep mode).
  */
 async function removeStroke(el: Element): Promise<{ok: boolean; removed: boolean; how: string}> {
-  if (getSettings().replaceMode === 'keep') {
+  if (KEEP_STROKE) {
     return {ok: true, removed: false, how: 'kept under the shape'};
   }
   const r = await deleteByNumber(el);
@@ -490,12 +497,13 @@ async function handleStroke(el: Element) {
     }
     const r = recognize(set.points, {
       tolerance: settings.tolerance,
-      minSize: settings.tinyShapes ? TINY_SHAPE_SIZE : MIN_SHAPE_SIZE,
+      minSize: TINY_SHAPE_SIZE,
       rect: settings.rect,
       circle: settings.circle,
       arrow: settings.arrow,
       arrowSnapDegrees: settings.arrowSnapDegrees,
       rectSnapDegrees: settings.rectSnapDegrees,
+      axesSnapDegrees: settings.axesSnapDegrees,
       brace: settings.brace,
       sqrt: settings.sqrt,
       axes: settings.axes,
@@ -556,8 +564,8 @@ async function handleStroke(el: Element) {
   let inserted = 0;
   // No lasso on the shape if the user already writes again: the selection
   // would take the next stroke as a lasso gesture.
-  const lassoAfter = settings.lassoAfter && hold.downs === downsAtStart && !hold.penDown;
-  if (settings.lassoAfter && !lassoAfter) {
+  const lassoAfter = hold.downs === downsAtStart && !hold.penDown;
+  if (!lassoAfter) {
     details.push('not selected: writing resumed');
   }
   const geometries = geometriesFor(shape, pen, lassoAfter, settings);

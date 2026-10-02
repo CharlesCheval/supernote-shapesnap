@@ -19,10 +19,10 @@ test('settings screen renders, shape icons toggle their shape', () => {
     tree = renderer.create(<App />);
   });
   const before = getSettings().brace;
-  // Icon buttons follow the SHAPES order: rect, circle, arrow, brace, sqrt, axes.
-  const buttons = tree!.root.findAllByType(Pressable).filter(n => n.props.style?.[0]?.width === 72);
+  // Icon buttons follow the SHAPES order: circle, rect, arrow, axes, brace, sqrt.
+  const buttons = tree!.root.findAllByType(Pressable).filter(n => n.props.style?.[0]?.width === 62);
   expect(buttons).toHaveLength(6);
-  act(() => buttons[3].props.onPress());
+  act(() => buttons[4].props.onPress());
   expect(getSettings().brace).toBe(!before);
 });
 
@@ -36,7 +36,7 @@ test('each shape row carries its own settings: arrow head size steps by 10 %', (
   const heads = tree!.root.findAll(n => n.props.children === 'Head' && n.type === Text);
   expect(heads.length).toBe(2); // arrow and axes
   const minus = tree!.root.findAllByType(Pressable).filter(p => p.findAllByType(Text).some(t => t.props.children === '−'));
-  act(() => minus[1].props.onPress()); // [0] = rectangle straighten, [1] = arrow head
+  act(() => minus[2].props.onPress()); // [0] rectangle straighten, [1] arrow straighten, [2] arrow head
   expect(getSettings().arrowHeadPct).toBe(before - 10);
 });
 

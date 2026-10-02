@@ -35,6 +35,8 @@ export type RecognizeOptions = {
   arrowSnapDegrees: number;
   /** Rectangles tilted less than this are straightened (default 12°). */
   rectSnapDegrees?: number;
+  /** Axes tilted less than this are straightened (default 8). */
+  axesSnapDegrees?: number;
   brace: boolean;
   sqrt: boolean;
   axes: boolean;
@@ -392,7 +394,7 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
     const tries: [boolean, () => {shape: Shape | null; reason: string}][] = [
       [opts.arrow, () => recognizeArrow(path, opts.minSize, k, opts.arrowSnapDegrees)],
       // Axes and square roots before braces: an "L" or a "√" also has a sharp middle.
-      [opts.axes, () => recognizeAxes(path, opts.minSize, k)],
+      [opts.axes, () => recognizeAxes(path, opts.minSize, k, opts.axesSnapDegrees ?? 8)],
       [opts.sqrt, () => recognizeSqrt(path, opts.minSize, k)],
       [opts.brace, () => recognizeBrace(path, opts.minSize, k)],
     ];

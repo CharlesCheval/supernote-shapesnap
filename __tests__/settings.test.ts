@@ -20,7 +20,7 @@ test('new per-shape settings: defaults, and saved values brought back in range',
   const s = normalize({arrowHeadPct: 999, axesTickMm: 0, rectSnapDegrees: 'x' as any});
   expect(s.arrowHeadPct).toBe(200);
   expect(s.axesTickMm).toBe(2);
-  expect(s.rectSnapDegrees).toBe(12);
+  expect(s.rectSnapDegrees).toBe(8);
   expect(normalize({}).axesTickWidthPct).toBe(50);
 });
 

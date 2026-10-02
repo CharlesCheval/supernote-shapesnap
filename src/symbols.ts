@@ -230,7 +230,7 @@ export function recognizeSqrt(path: P[], minSize: number, k: number): Result {
  * in one stroke. The corner is the origin; each leg becomes an axis in the
  * direction it was drawn.
  */
-export function recognizeAxes(path: P[], minSize: number, k: number): Result {
+export function recognizeAxes(path: P[], minSize: number, k: number, snapDegrees = 8): Result {
   const s = path[0];
   const e = path[path.length - 1];
   let c = 0;
@@ -271,7 +271,7 @@ export function recognizeAxes(path: P[], minSize: number, k: number): Result {
   const turn = diff > 0 ? Math.PI / 2 : -Math.PI / 2;
   let frame = t0 + (diff - turn) / 2; // leg 0 direction, leg 1 at frame + turn
   const tilt = deg(frame) - Math.round(deg(frame) / 90) * 90;
-  if (Math.abs(tilt) <= 7 * k) {
+  if (Math.abs(tilt) <= snapDegrees) {
     frame -= (tilt * Math.PI) / 180;
   }
   const along = (a: number, len: number) => {

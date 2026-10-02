@@ -21,6 +21,8 @@ export type Settings = {
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
   arrowSnapDegrees: number;
+  /** Axes tilted less than this are straightened to the page axes (0 = never). */
+  axesSnapDegrees: number;
   /** Arrow head size, percent of the size set by the pen width. */
   arrowHeadPct: number;
   /** Curly brace, in any of the four directions. */
@@ -39,8 +41,6 @@ export type Settings = {
   axesTickMm: number;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
-  /** Also snap tiny shapes (down to 1 mm), only after a pause at the end. */
-  tinyShapes: boolean;
   /**
    * What happens to the hand-drawn stroke once the shape is inserted:
    * number = deleted by element number (works over writing, but resets undo history) ·
@@ -56,14 +56,15 @@ export const REPLACE_MODES: ReplaceMode[] = ['number', 'keep'];
 
 export const DEFAULTS: Settings = {
   enabled: true,
-  holdMs: 0,
+  holdMs: 350,
   stillRadius: 12,
-  tolerance: 3,
+  tolerance: 5,
   rect: true,
-  rectSnapDegrees: 12,
+  rectSnapDegrees: 8,
   circle: true,
   arrow: true,
   arrowSnapDegrees: 8,
+  axesSnapDegrees: 8,
   arrowHeadPct: 100,
   brace: true,
   sqrt: true,
@@ -73,7 +74,6 @@ export const DEFAULTS: Settings = {
   axesTickWidthPct: 50,
   axesTickMm: 5,
   lassoAfter: true,
-  tinyShapes: false,
   replaceMode: 'number',
 };
 
@@ -83,6 +83,7 @@ export const LIMITS = {
   tolerance: {min: 1, max: 5, step: 1},
   arrowSnapDegrees: {min: 0, max: 20, step: 1},
   rectSnapDegrees: {min: 0, max: 20, step: 1},
+  axesSnapDegrees: {min: 0, max: 20, step: 1},
   arrowHeadPct: {min: 30, max: 200, step: 10},
   axesHeadPct: {min: 30, max: 200, step: 10},
   axesTickWidthPct: {min: 20, max: 100, step: 10},
