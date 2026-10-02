@@ -257,3 +257,17 @@ test('long thin rectangle drawn slowly (many points, wobbly) is still a rectangl
   expect(r.shape?.kind).toBe('rect');
   expect(r.metrics?.corners).toBe(4);
 });
+
+test('tiny shapes (about 3 mm) are recognised with the tiny minimum size', () => {
+  const tiny = {...opts, minSize: 24};
+  const circle = Array.from({length: 60}, (_, i) => ({
+    x: 100 + 17 * Math.cos((2 * Math.PI * i) / 59),
+    y: 100 + 17 * Math.sin((2 * Math.PI * i) / 59),
+  }));
+  expect(recognize(circle, tiny).shape?.kind).toBe('circle');
+  expect(recognize(circle, opts).shape).toBeNull(); // too small by default
+  const side = (a: P, b: P) => Array.from({length: 15}, (_, i) => ({x: a.x + ((b.x - a.x) * i) / 15, y: a.y + ((b.y - a.y) * i) / 15}));
+  const c = [{x: 0, y: 0}, {x: 40, y: 0}, {x: 40, y: 28}, {x: 0, y: 28}];
+  const rect = [...side(c[0], c[1]), ...side(c[1], c[2]), ...side(c[2], c[3]), ...side(c[3], c[0]), c[0]];
+  expect(recognize(rect, tiny).shape?.kind).toBe('rect');
+});

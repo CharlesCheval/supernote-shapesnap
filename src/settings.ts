@@ -39,6 +39,8 @@ export type Settings = {
   axesTickMm: number;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
+  /** Also snap tiny shapes (down to 2 mm), only after a pause at the end. */
+  tinyShapes: boolean;
   /**
    * What happens to the hand-drawn stroke once the shape is inserted:
    * number = deleted by element number (works over writing, but resets undo history) ·
@@ -71,6 +73,7 @@ export const DEFAULTS: Settings = {
   axesTickWidthPct: 50,
   axesTickMm: 5,
   lassoAfter: true,
+  tinyShapes: false,
   replaceMode: 'number',
 };
 

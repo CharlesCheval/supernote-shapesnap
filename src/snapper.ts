@@ -19,6 +19,12 @@ import {getSettings} from './settings';
 const ASSUMED_POINTS_PER_SECOND = 100;
 const TAIL_POINTS = 200;
 const MIN_SHAPE_SIZE = 60;
+/**
+ * Tiny shapes (setting): down to about 2 mm, but only after a pause at the end
+ * of the stroke, so that letters such as "o" or "0" written at speed stay ink.
+ */
+const TINY_SHAPE_SIZE = 24;
+const TINY_HOLD_MS = 300;
 
 const hold = new HoldTracker(() => getSettings().stillRadius);
 
@@ -472,10 +478,19 @@ async function handleStroke(el: Element) {
   const details: string[] = [];
   details.push(`stroke: pen ${stroke.penType}, color ${stroke.penColor}, thickness ${el.thickness}, #${el.numInPage}`);
   let shape: Shape | null = null;
+  let extent = Infinity;
   for (const set of await pointSets(el, size)) {
+    if (set.points.length) {
+      const xs = set.points.map(p => p.x);
+      const ys = set.points.map(p => p.y);
+      extent = Math.max(
+        xs.reduce((a, b) => Math.max(a, b), -Infinity) - xs.reduce((a, b) => Math.min(a, b), Infinity),
+        ys.reduce((a, b) => Math.max(a, b), -Infinity) - ys.reduce((a, b) => Math.min(a, b), Infinity),
+      );
+    }
     const r = recognize(set.points, {
       tolerance: settings.tolerance,
-      minSize: MIN_SHAPE_SIZE,
+      minSize: settings.tinyShapes ? TINY_SHAPE_SIZE : MIN_SHAPE_SIZE,
       rect: settings.rect,
       circle: settings.circle,
       arrow: settings.arrow,
@@ -497,6 +512,15 @@ async function handleStroke(el: Element) {
   if (!shape) {
     report({stillMs, holdSource, result: 'pause detected, shape not recognized', details});
     return;
+  }
+  // A tiny shape needs a pause at the end, even with a hold of 0 ms.
+  if (extent < MIN_SHAPE_SIZE) {
+    const held = settings.holdMs > 0 ? stillMs : (await measureHold(stroke, size, el.pageNum)).stillMs;
+    details.push(`tiny shape (${Math.round(extent)} px): pause ${held} ms`);
+    if (held < TINY_HOLD_MS) {
+      report({stillMs: held, holdSource, result: `tiny shape kept as ink: hold the pen ${TINY_HOLD_MS} ms at the end`, details});
+      return;
+    }
   }
 
   // Active pen style; fall back to the stroke's own style.

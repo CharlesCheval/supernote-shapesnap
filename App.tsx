@@ -253,6 +253,14 @@ function App(): React.JSX.Element {
           <Explained text="1 = neat drawing · 5 = lenient">
             <Chip label="Tolerance" k="tolerance" unit=" / 5" />
           </Explained>
+          <Explained text="Down to 2 mm · hold the pen at the end">
+            <Switch
+              label="Tiny shapes"
+              value={s.tinyShapes ? 'On' : 'Off'}
+              on={s.tinyShapes}
+              onPress={() => updateSettings({tinyShapes: !s.tinyShapes})}
+            />
+          </Explained>
         </Block>
         <Block title="After snapping">
           <Explained text="Shape comes lasso-selected">
