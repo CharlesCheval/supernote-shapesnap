@@ -27,7 +27,10 @@ jobs:
           test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME != v$version"; exit 1; }
       - run: bash ./buildPlugin.sh
       - run: test -f build/outputs/ShapeSnap.snplg
+      # The build is named after the plugin key (ShapeSnap), which must never change;
+      # the release file carries the plugin's current name.
+      - run: cp build/outputs/ShapeSnap.snplg build/outputs/Snap.snplg
       - uses: softprops/action-gh-release@v2
         with:
-          files: build/outputs/ShapeSnap.snplg
+          files: build/outputs/Snap.snplg
           generate_release_notes: true
