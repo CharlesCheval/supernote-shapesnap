@@ -490,6 +490,14 @@ async function handleStroke(el: Element) {
     return;
   }
   const place = await currentPlace();
+  // PDFs (measured, test.19–21): strokes deleted there come back later, at
+  // random moments (the deletion does not hold), and the page is not redrawn.
+  // Nothing is touched in a PDF until the host handles deletion there. The
+  // PDF branches below are kept for that day.
+  if (/\.pdf#[^#]*$/i.test(place)) {
+    report({stillMs: 0, holdSource: 'clock', result: 'PDF: not available (deleting strokes is unreliable there)', details: []});
+    return;
+  }
   // Pen-downs so far: a higher count later means the user already writes again.
   const downsAtStart = hold.downs;
   const size = await stroke.points.size();
