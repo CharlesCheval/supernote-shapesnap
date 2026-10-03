@@ -55,6 +55,29 @@ export function subscribeMeasures(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
+/**
+ * While true, the plugin view shows nothing: it is opened then closed at once
+ * so the host redraws the page under it (PDFs: no save, so no reload; the
+ * SDK has no screen refresh, setFullAuto is empty on the native side).
+ */
+export let blinking = false;
+
+async function blinkRedraw(): Promise<string> {
+  blinking = true;
+  listeners.forEach(fn => fn());
+  try {
+    await PluginManager.showPluginView();
+    await sleep(250);
+    return 'view opened and closed';
+  } catch (e: any) {
+    return `view: ${e?.message ?? e}`;
+  } finally {
+    await PluginManager.closePluginView().catch(() => {});
+    blinking = false;
+    listeners.forEach(fn => fn());
+  }
+}
+
 function report(m: Omit<Measure, 'at'>) {
   lastMeasure = {...m, at: Date.now()};
   listeners.forEach(fn => fn());
@@ -600,10 +623,9 @@ async function handleStroke(el: Element) {
     }
     if (inPdf && (await currentPlace()) === place && !hold.penDown) {
       // No save for PDFs in the SDK, so no reload (unsaved writing could be
-      // lost): the same page is shown again instead, which may redraw it.
-      const pageNum = ok<number>(await PluginCommAPI.getCurrentPageNum());
-      const shown: any = pageNum != null ? await PluginCommAPI.jumpToPage(pageNum) : null;
-      details.push(`redraw (PDF): ${ok<boolean>(shown) != null ? 'page shown again' : errorText(shown)}`);
+      // lost): the plugin view is opened and closed over the page instead.
+      // Showing the same page again did not redraw it (test.20).
+      details.push(`redraw (PDF): ${await blinkRedraw()}`);
     } else if ((await currentPlace()) === place && !hold.penDown) {
       const saved: any = await PluginNoteAPI.saveCurrentNote();
       if (saved?.success && saved.result !== false && !hold.penDown) {

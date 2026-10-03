@@ -19,7 +19,7 @@ import {
   subscribe,
   updateSettings,
 } from './src/settings';
-import {lastMeasure, subscribeMeasures} from './src/snapper';
+import {blinking, lastMeasure, subscribeMeasures} from './src/snapper';
 
 type NumKey = keyof typeof LIMITS;
 
@@ -191,6 +191,10 @@ function App(): React.JSX.Element {
       b();
     };
   }, []);
+  if (blinking) {
+    // Opened only to make the host redraw the page under it (PDFs).
+    return <View style={styles.blink} />;
+  }
   const s = getSettings();
   const m = lastMeasure;
 
@@ -249,6 +253,7 @@ function App(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  blink: {flex: 1, backgroundColor: 'transparent'},
   container: {flex: 1, backgroundColor: '#ffffff'},
   content: {paddingHorizontal: 32, paddingTop: 22, paddingBottom: 24},
   header: {
