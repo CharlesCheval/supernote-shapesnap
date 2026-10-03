@@ -1,10 +1,12 @@
 name: Release
 
 # Push a tag matching the plugin version (e.g. v0.7.1) to build the .snplg
-# and attach it to a GitHub release.
+# and attach it to a GitHub release. Or run it by hand on main: the tag is
+# then made from versionName in PluginConfig.json.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,10 +23,14 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx jest
-      - name: Check the tag matches PluginConfig.json
+      - name: Release tag (the pushed tag must match PluginConfig.json)
+        id: tag
         run: |
           version=$(node -p "require('./PluginConfig.json').versionName")
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME != v$version"; exit 1; }
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME != v$version"; exit 1; }
+          fi
+          echo "name=v$version" >> "$GITHUB_OUTPUT"
       - run: bash ./buildPlugin.sh
       - run: test -f build/outputs/ShapeSnap.snplg
       # The build is named after the plugin key (ShapeSnap), which must never change;
@@ -32,5 +38,7 @@ jobs:
       - run: cp build/outputs/ShapeSnap.snplg build/outputs/Snap.snplg
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ github.sha }}
           files: build/outputs/Snap.snplg
           generate_release_notes: true
