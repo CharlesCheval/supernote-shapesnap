@@ -598,7 +598,13 @@ async function handleStroke(el: Element) {
     if (hold.penDown) {
       await hold.nextUp();
     }
-    if ((await currentPlace()) === place && !hold.penDown) {
+    if (inPdf && (await currentPlace()) === place && !hold.penDown) {
+      // No save for PDFs in the SDK, so no reload (unsaved writing could be
+      // lost): the same page is shown again instead, which may redraw it.
+      const pageNum = ok<number>(await PluginCommAPI.getCurrentPageNum());
+      const shown: any = pageNum != null ? await PluginCommAPI.jumpToPage(pageNum) : null;
+      details.push(`redraw (PDF): ${ok<boolean>(shown) != null ? 'page shown again' : errorText(shown)}`);
+    } else if ((await currentPlace()) === place && !hold.penDown) {
       const saved: any = await PluginNoteAPI.saveCurrentNote();
       if (saved?.success && saved.result !== false && !hold.penDown) {
         const reloaded: any = await PluginCommAPI.reloadFile();
@@ -608,7 +614,9 @@ async function handleStroke(el: Element) {
       }
     }
   }
-  report({stillMs, holdSource, result: CREATED[shape.kind], details});
+  // The redraw step is shown with the result while it is being tested.
+  const redraw = details.find(d => d.startsWith('redraw'));
+  report({stillMs, holdSource, result: redraw ? `${CREATED[shape.kind]} · ${redraw}` : CREATED[shape.kind], details});
 }
 
 let queue: Promise<void> = Promise.resolve();
