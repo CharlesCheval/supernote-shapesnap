@@ -59,7 +59,7 @@ All settings are saved and survive restarts and updates (one small folder per se
 
 ## Install and build
 
-1. Download `Snap.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-shapesnap/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
+1. Download `Snap.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-snap/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
 2. Open **Settings → Apps → Plugins → Add plugin**. It replaces ShapeSnap in place, settings included.
 3. The first snapped shape asks for file access (**Always allow**), needed to delete the hand-drawn stroke.
 
