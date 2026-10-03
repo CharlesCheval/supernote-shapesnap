@@ -585,6 +585,18 @@ async function handleStroke(el: Element) {
     report({stillMs, holdSource, result: 'failed: shape not inserted, stroke restored', details});
     return;
   }
+  // Without a lasso the host does not redraw the area: the deleted stroke stays
+  // in its screen buffer and shows again wherever the pen passes, until the
+  // next autosave redraws the page (seen with axes). Save now to redraw.
+  if (!lassoAfter || shape.kind === 'axes') {
+    if (hold.penDown) {
+      await hold.nextUp();
+    }
+    if ((await currentPlace()) === place) {
+      await PluginNoteAPI.saveCurrentNote();
+      details.push('saved to redraw (no lasso)');
+    }
+  }
   report({stillMs, holdSource, result: CREATED[shape.kind], details});
 }
 
