@@ -564,8 +564,13 @@ async function handleStroke(el: Element) {
   let inserted = 0;
   // No lasso on the shape if the user already writes again: the selection
   // would take the next stroke as a lasso gesture.
-  const lassoAfter = hold.downs === downsAtStart && !hold.penDown;
-  if (!lassoAfter) {
+  // Nor in a PDF: there the lasso put on a new shape misleads the lasso APIs
+  // (Palette read the shape at the wrong place, measured): it is lassoed by hand.
+  const inPdf = place.slice(0, place.lastIndexOf('#')).toLowerCase().endsWith('.pdf');
+  const lassoAfter = hold.downs === downsAtStart && !hold.penDown && !inPdf;
+  if (inPdf) {
+    details.push('not selected: PDF');
+  } else if (!lassoAfter) {
     details.push('not selected: writing resumed');
   }
   const geometries = geometriesFor(shape, pen, lassoAfter, settings);
