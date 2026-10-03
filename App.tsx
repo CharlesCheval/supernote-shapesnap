@@ -197,7 +197,7 @@ function App(): React.JSX.Element {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.title}>ShapeSnap</Text>
+        <Text style={styles.title}>Snap</Text>
         <View style={styles.headerRight}>
           <Pressable
             style={[styles.switch, s.enabled && styles.switchOn]}

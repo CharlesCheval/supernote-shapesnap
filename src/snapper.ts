@@ -301,7 +301,7 @@ async function ensureFileAccess(): Promise<boolean> {
     }
     const choice = await PluginManager.requestPermission(
       permission,
-      'ShapeSnap replaces your stroke with a clean shape, which requires editing the page.',
+      'Snap replaces your stroke with a clean shape, which requires editing the page.',
     );
     if (choice !== 1 && choice !== 2) {
       fileAccess = false;
@@ -586,15 +586,21 @@ async function handleStroke(el: Element) {
     return;
   }
   // Without a lasso the host does not redraw the area: the deleted stroke stays
-  // in its screen buffer and shows again wherever the pen passes, until the
-  // next autosave redraws the page (seen with axes). Save now to redraw.
+  // in its screen buffer and shows again wherever the pen passes, for 5-10 s
+  // (seen with axes). Saving alone did not redraw it (test.17): the note is
+  // saved, then reloaded, which redraws the page.
   if (!lassoAfter || shape.kind === 'axes') {
     if (hold.penDown) {
       await hold.nextUp();
     }
-    if ((await currentPlace()) === place) {
-      await PluginNoteAPI.saveCurrentNote();
-      details.push('saved to redraw (no lasso)');
+    if ((await currentPlace()) === place && !hold.penDown) {
+      const saved: any = await PluginNoteAPI.saveCurrentNote();
+      if (saved?.success && saved.result !== false && !hold.penDown) {
+        const reloaded: any = await PluginCommAPI.reloadFile();
+        details.push(`redraw: ${ok<boolean>(reloaded) != null ? 'reloaded' : errorText(reloaded)}`);
+      } else {
+        details.push(`redraw: not saved (${errorText(saved)})`);
+      }
     }
   }
   report({stillMs, holdSource, result: CREATED[shape.kind], details});

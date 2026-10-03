@@ -1,5 +1,5 @@
 /**
- * Which strokes ShapeSnap may touch. Pure logic, unit-tested.
+ * Which strokes Snap may touch. Pure logic, unit-tested.
  *
  * The host sends event_pen_up for lasso paths too, as a stroke element, and the
  * lasso APIs (getLassoRect…) answer "not allowed" (code 102) while the lasso tool

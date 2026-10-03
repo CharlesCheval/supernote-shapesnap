@@ -196,7 +196,7 @@ export async function loadSettings() {
       }
     }
   } catch (e) {
-    console.warn('[ShapeSnap] loadSettings', e);
+    console.warn('[Snap] loadSettings', e);
   }
 }
 
@@ -223,12 +223,12 @@ export function updateSettings(patch: Partial<Settings>) {
       }
       for (const name of encodeEntries(snapshot)) {
         if (!(await FileUtils.makeDir(`${next}/${name}`))) {
-          console.warn('[ShapeSnap] saveSettings: could not write', name);
+          console.warn('[Snap] saveSettings: could not write', name);
           return;
         }
       }
       await FileUtils.deleteDir(`${base}/settings`);
       await FileUtils.renameToFile(next, `${base}/settings`);
     })
-    .catch(e => console.warn('[ShapeSnap] saveSettings', e));
+    .catch(e => console.warn('[Snap] saveSettings', e));
 }

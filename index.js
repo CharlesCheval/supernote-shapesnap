@@ -26,10 +26,10 @@ PluginManager.registerConfigButtonListener({
 const SETTINGS_BUTTON = 401;
 PluginManager.registerButton(1, ['NOTE', 'DOC'], {
   id: SETTINGS_BUTTON,
-  name: 'ShapeSnap',
+  name: 'Snap',
   icon: Image.resolveAssetSource(require('./assets/icon_shapes.png')).uri,
   showType: 1,
-}).catch(e => console.warn('[ShapeSnap] menu button', e));
+}).catch(e => console.warn('[Snap] menu button', e));
 PluginManager.registerButtonListener({
   onButtonPress(event) {
     if (event?.id === SETTINGS_BUTTON) {

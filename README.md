@@ -1,4 +1,4 @@
-# ShapeSnap — Supernote plugin
+# Snap — Supernote plugin
 
 Draw a **rectangle**, a **circle**, an **arrow**, a **curly brace**, a **square root** or **coordinate axes** and lift the pen. The stroke is replaced by a perfect shape. You can also require a short **hold** at the end of the stroke:
 
@@ -12,11 +12,11 @@ Draw a **rectangle**, a **circle**, an **arrow**, a **curly brace**, a **square 
 - **Coordinate axes:** draw an "L" (one vertical and one horizontal leg, each at least 90 px). The corner becomes the origin; each leg becomes an axis in the direction it was drawn, with ticks (every 5 mm by default, drawn as a separate, thinner polyline) and a solid arrow head.
 - **Normal writing:** a stroke without a pause is left untouched.
 
-The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → ShapeSnap**.
+The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → Snap**.
 
 ## Settings
 
-One page, no scrolling. The **On / Off** switch in the header turns ShapeSnap off altogether. Then **Symbols**, one row per shape: tap its icon to turn it on (black) or off (grey); the settings of that shape sit next to it.
+One page, no scrolling. The **On / Off** switch in the header turns Snap off altogether. Then **Symbols**, one row per shape: tap its icon to turn it on (black) or off (grey); the settings of that shape sit next to it.
 
 | Shape | Settings |
 |---|---|
@@ -59,7 +59,7 @@ The **Last stroke** lines, in small print at the bottom, show three things:
 
   An earlier `lasso` mode deleted the stroke through a plugin-driven lasso to keep the undo history. It was removed in 0.9.0: it left the stroke behind whenever the shape was drawn over writing, and driving the lasso could clash with the user's own lasso selection. Saved `lasso` settings switch to `number`.
 - If the file or page changes while a stroke is being processed, the plugin cancels without editing anything.
-- **Lasso tool:** the host sends lasso paths through the same pen-up event, as a stroke with `penType` 4 (measured on a Manta, undocumented). While the lasso tool is active, the lasso APIs (`getLassoRect`…) answer "not allowed" (code 102), so they cannot detect it. ShapeSnap therefore only touches strokes drawn with a known ink pen (`penType` 1, 10, 11, 15 from the SDK, and 16 for the ink pen, measured; `src/guard.ts`); anything else is ignored. As a second guard, a stroke is also ignored when a lasso selection exists when the pen lifts. The plugin never drives the lasso itself.
+- **Lasso tool:** the host sends lasso paths through the same pen-up event, as a stroke with `penType` 4 (measured on a Manta, undocumented). While the lasso tool is active, the lasso APIs (`getLassoRect`…) answer "not allowed" (code 102), so they cannot detect it. Snap therefore only touches strokes drawn with a known ink pen (`penType` 1, 10, 11, 15 from the SDK, and 16 for the ink pen, measured; `src/guard.ts`); anything else is ignored. As a second guard, a stroke is also ignored when a lasso selection exists when the pen lifts. The plugin never drives the lasso itself.
 - **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape).
 - **Timeout:** each stroke is processed within 8 s, so a stuck host call can never block the following strokes.
 
